@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import type { ChannelRuntime } from '../runtime.js'
+import { requiredSecret, type ChannelRuntime } from '../runtime.js'
 import type { Destination, Incoming, Reply } from '../transport.js'
-import { CallbackError, credential, messageText, signedEvents } from './signed-events.js'
+import { CallbackError, messageText, signedEvents } from './signed-events.js'
 
 export interface OneBotConfig {
   selfId: string
@@ -35,8 +35,8 @@ export function startOneBot(config: OneBotConfig, runtime: ChannelRuntime): void
     throw new Error('OneBot apiBase must be an HTTP(S) action URL')
   }
   if (!base.pathname.endsWith('/')) base.pathname += '/'
-  const token = credential(config.accessTokenEnv ?? 'ONEBOT_ACCESS_TOKEN')
-  const secret = credential(config.eventSecretEnv ?? 'ONEBOT_EVENT_SECRET')
+  const token = requiredSecret(runtime, 'accessToken', config.accessTokenEnv ?? 'ONEBOT_ACCESS_TOKEN')
+  const secret = requiredSecret(runtime, 'eventSecret', config.eventSecretEnv ?? 'ONEBOT_EVENT_SECRET')
   const id = 'onebot/' + selfId
   const access = runtime.access(id, config.allowedUserIds)
   const permits = (target: Destination) => target.chat === target.user && !!qqNumber(target.user) && target.user !== selfId && access(target)

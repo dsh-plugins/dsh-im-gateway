@@ -102,6 +102,13 @@ export class GatewayState {
     this.db.prepare('INSERT OR REPLACE INTO gateway_values VALUES (?,?)').run(key, value)
   }
 
+  compareAndSet(key: string, previous: string | undefined, value: string): boolean {
+    const result = previous === undefined
+      ? this.db.prepare('INSERT OR IGNORE INTO gateway_values VALUES (?, ?)').run(key, value)
+      : this.db.prepare('UPDATE gateway_values SET value=? WHERE key=? AND value=?').run(value, key, previous)
+    return Number(result.changes) === 1
+  }
+
   paired(channel: string, target: Destination): boolean {
     return !!this.db.prepare('SELECT 1 FROM authorized_chats WHERE owner=?').get(principal(channel, target))
   }

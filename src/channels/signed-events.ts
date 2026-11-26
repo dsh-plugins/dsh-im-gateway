@@ -35,12 +35,6 @@ export function signedEvents(
   }
 }
 
-export function credential(envName: string): string {
-  const value = process.env[envName]
-  if (!value?.trim()) throw new Error('Channel credential missing from ' + envName)
-  return value
-}
-
 export function messageText(reply: {text: string; inspectTask?: string}): string {
   return reply.text + (reply.inspectTask ? '\n/inspect ' + reply.inspectTask : '')
 }

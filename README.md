@@ -10,7 +10,13 @@ English | [简体中文](README.zh_CN.md)
 
 </div>
 
-## Set up Prism
+## Install in the DSH web app
+
+Open **Plugins → Add plugin** and install and enable the five `@dsh-prism` packages in the order shown in the guide. To install this package, enter `@dsh-prism/dsh-im-gateway@0.1.1`. [Illustrated installation guide](https://prism.dsh-plug.in/guide/start)
+
+Open **Settings → Prism** and choose a messaging channel. Telegram, WeChat, Feishu / Lark, WeCom, QQ Bot, OneBot and Discord each have settings for credentials or account registration and direct-message access. For Feishu, you can generate a registration QR code or enter an existing app’s credentials. Save your settings, then enable the channel when you are ready. [Messaging channel walkthrough](https://prism.dsh-plug.in/guide/im)
+
+## Run the standalone host from source
 
 Use Node.js 24.9 or later, npm, Git and credentials with read access to the five private plugin repositories. The checkout script places matching plugins and launcher files in a local `runtime/` directory. Run subsequent installation, configuration and launch commands there. The public guide is available without signing in. To use the example models, configure your DeepSeek credentials in DSH or set the `DEEPSEEK_API_KEY` environment variable. [Installation guide](https://prism.dsh-plug.in/)
 
@@ -24,7 +30,7 @@ npm run build
 npm start
 ```
 
-## Connect your chat app
+## Configure a chat app on the standalone host
 
 Before connecting a service, copy the sample configuration in your local `runtime/` directory. Each transport verifies the platform identity before handing a message to the conversation agent.
 
@@ -42,7 +48,7 @@ cp prism.example.json prism.config.json
 | OneBot | `im.onebot` |
 | Discord | `im.discord` |
 
-## Link a private chat
+## Link a private chat on the standalone host
 
 For WeChat or Feishu, run the appropriate login command on the Prism host and follow the QR login instructions. Using the same `--config` file for setup and startup stores the registration in the configured gateway database and enables that channel.
 

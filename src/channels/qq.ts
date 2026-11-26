@@ -1,7 +1,7 @@
 import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto'
-import type { ChannelRuntime } from '../runtime.js'
+import { requiredSecret, type ChannelRuntime } from '../runtime.js'
 import type { Destination, Reply } from '../transport.js'
-import { CallbackError, credential, messageText, signedEvents } from './signed-events.js'
+import { CallbackError, messageText, signedEvents } from './signed-events.js'
 
 export interface QQConfig { appId: string; appSecretEnv?: string; allowedUserIds?: string[] }
 
@@ -21,7 +21,7 @@ const openId = (id: unknown): id is string => typeof id === 'string' && /^[a-zA-
 
 export function startQQ(options: QQConfig, runtime: ChannelRuntime): void {
   if (!/^\d+$/.test(options.appId) || typeof options.appId !== 'string') throw new Error('Invalid QQ appId')
-  const secret = credential(options.appSecretEnv ?? 'QQ_BOT_SECRET')
+  const secret = requiredSecret(runtime, 'appSecret', options.appSecretEnv ?? 'QQ_BOT_SECRET')
   const privateKey = signingKey(secret)
   const publicKey = createPublicKey(privateKey)
   const id = 'qq/' + options.appId

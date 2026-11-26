@@ -1,5 +1,5 @@
 import * as Lark from '@larksuiteoapi/node-sdk'
-import type { ChannelRuntime } from './runtime.js'
+import { channelSecret, type ChannelRuntime } from './runtime.js'
 import type { GatewayState } from './state.js'
 import type { Destination, ImTransport, Incoming, Reply } from './transport.js'
 
@@ -16,7 +16,7 @@ const registrationKey = 'feishu/registration'
 
 /** The SDK polls Feishu's app registration endpoint and switches domains for Lark tenants. */
 export async function loginFeishu(
-  state: Pick<GatewayState, 'set'>, onCode: (url: string) => void, signal?: AbortSignal,
+  state: Pick<GatewayState, 'set'>, onCode: (url: string, expireIn?: number) => void, signal?: AbortSignal,
   register: typeof Lark.registerApp = Lark.registerApp,
 ): Promise<Omit<Registration, 'appSecret'>> {
   signal?.throwIfAborted()
@@ -29,7 +29,7 @@ export async function loginFeishu(
       scopes: { tenant: ['im:message.p2p_msg:readonly', 'im:message:send_as_bot', 'im:message:update'] },
       events: { items: { tenant: ['im.message.receive_v1'] } },
     },
-    onQRCodeReady: ({ url }) => onCode(url),
+    onQRCodeReady: ({ url, expireIn }) => onCode(url, expireIn),
     onStatusChange: event => { if (event.status === 'domain_switched') domain = 'lark' },
   })
   signal?.throwIfAborted()
@@ -39,13 +39,13 @@ export async function loginFeishu(
   return info
 }
 
-function credentials(config: FeishuConfig, state: GatewayState): Registration {
+function credentials(config: FeishuConfig, runtime: ChannelRuntime): Registration {
   if (config.appId || config.appSecretEnv) {
-    const secret = process.env[config.appSecretEnv ?? 'FEISHU_APP_SECRET']
+    const secret = channelSecret(runtime, 'appSecret', config.appSecretEnv ?? 'FEISHU_APP_SECRET')
     if (!config.appId || !secret) throw new Error('Feishu needs an appId and an app secret')
     return { appId: config.appId, appSecret: secret, domain: config.domain ?? 'feishu' }
   }
-  const stored = state.get(registrationKey)
+  const stored = runtime.state.get(registrationKey)
   if (!stored) throw new Error('Feishu requires app credentials or prism-im login feishu')
   const saved = JSON.parse(stored) as Registration
   if (!saved.appId || !saved.appSecret || !['feishu', 'lark'].includes(saved.domain)) throw new Error('Invalid saved Feishu credentials')
@@ -112,7 +112,7 @@ export class FeishuTransport implements ImTransport {
 
 export async function startFeishu(config: FeishuConfig, runtime: ChannelRuntime): Promise<void> {
   runtime.signal.throwIfAborted()
-  const auth = credentials(config, runtime.state)
+  const auth = credentials(config, runtime)
   const id = 'feishu/' + auth.domain + '/' + auth.appId
   const users = [...config.allowedUserIds ?? config.allowedUsers ?? [], ...auth.openId ? [auth.openId] : []]
   // Some SDK clients fall back to info at the fatal level. Keep credential-bearing HTTP objects off host logs.

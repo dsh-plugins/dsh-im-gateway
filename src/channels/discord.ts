@@ -2,7 +2,7 @@ import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, Client, DefaultRestOptions, DiscordAPIError, Events,
   GatewayIntentBits, Partials, RESTJSONErrorCodes, type MessageCreateOptions,
 } from 'discord.js'
-import type { ChannelRuntime } from '../runtime.js'
+import { channelSecret, type ChannelRuntime } from '../runtime.js'
 import type { Destination, Incoming, Reply } from '../transport.js'
 
 export interface DiscordConfig {
@@ -33,7 +33,7 @@ export function discordPayload(reply: Reply) {
 
 export async function startDiscord(config: DiscordConfig, runtime: ChannelRuntime) {
   if (runtime.signal.aborted) return
-  const token = process.env[config.tokenEnv ?? 'DISCORD_BOT_TOKEN']
+  const token = channelSecret(runtime, 'token', config.tokenEnv ?? 'DISCORD_BOT_TOKEN')
   if (!token) throw new Error('Discord bot token environment variable is empty')
   // Discord delivers DM contents without the privileged guild message-content intent.
   const client = new Client({

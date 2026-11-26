@@ -10,7 +10,13 @@
 
 </div>
 
-## 接入棱镜
+## 在 DSH 网页端安装
+
+在 DSH 的 **插件 → 添加插件** 中按安装指南列出的顺序安装并启用五个 `@dsh-prism` 包。此包可按完整包名 `@dsh-prism/dsh-im-gateway@0.1.1` 安装。[前端安装图解](https://prism.dsh-plug.in/zh/guide/start)
+
+进入 **设置 → 棱镜**，打开消息渠道并选择 Telegram、微信、飞书 / Lark、企业微信、QQ 机器人、OneBot 或 Discord。可以先查看各渠道的凭据和私聊授权设置。飞书支持生成二维码注册应用，也可填写已有应用的凭据。保存设置后，可单独启用该渠道。[各渠道配置图解](https://prism.dsh-plug.in/zh/guide/im)
+
+## 从源码运行独立宿主
 
 需要 Node.js 24.9 或更高版本、npm、Git，以及对五个私有插件仓库的 Git 读取权限。检出脚本把匹配的插件和启动文件放入本机的 `runtime/` 目录，后续安装、配置和运行命令均在该目录执行。公开使用指南可直接阅读。需要调用示例模型时，请先在 DSH 凭据存储中配置 DeepSeek 凭据，或设置环境变量 `DEEPSEEK_API_KEY`。[安装指南](https://prism.dsh-plug.in/zh/)
 
@@ -24,7 +30,7 @@ npm run build
 npm start
 ```
 
-## 连接聊天应用
+## 在独立宿主中配置聊天应用
 
 接入通道前，先在本机的 `runtime/` 中复制示例配置。各适配器会先认证平台上的用户身份，再将消息交给对话代理。
 
@@ -42,7 +48,7 @@ cp prism.example.json prism.config.json
 | OneBot | `im.onebot` |
 | Discord | `im.discord` |
 
-## 绑定私聊
+## 在独立宿主中绑定私聊
 
 使用微信或飞书时，请在棱镜宿主上运行对应登录命令，并按提示扫码。使用同一个 `--config` 文件配置和启动网关后，注册信息会写入所配置的网关数据库，相应通道会启用。
 

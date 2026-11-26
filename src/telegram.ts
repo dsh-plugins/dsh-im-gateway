@@ -3,7 +3,7 @@ import type { ImGateway } from './gateway.js'
 import type { GatewayState } from './state.js'
 import type { Destination, ImTransport, Incoming, Reply } from './transport.js'
 
-import type { ChannelRuntime } from './runtime.js'
+import { channelSecret, type ChannelRuntime } from './runtime.js'
 export interface TelegramConfig { tokenEnv?: string; allowedUserIds?: string[] }
 interface User { id: number; is_bot: boolean; language_code?: string }
 interface Chat { type: string; id: number }
@@ -133,7 +133,7 @@ export class TelegramTransport implements ImTransport {
 }
 
 export function startTelegram(options: TelegramConfig, runtime: ChannelRuntime): Promise<void> {
-  const token = process.env[options.tokenEnv ?? 'TELEGRAM_BOT_TOKEN'] ?? runtime.state.get('telegram/token')
+  const token = channelSecret(runtime, 'token', options.tokenEnv ?? 'TELEGRAM_BOT_TOKEN', () => runtime.state.get('telegram/token'))
   if (!token) throw new Error('Missing Telegram bot token')
   const channel = 'telegram/' + token.split(':')[0]
   const transport = new TelegramTransport(token, options.allowedUserIds ?? [], runtime.signal, fetch, runtime.access(channel))

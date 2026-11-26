@@ -1,5 +1,5 @@
 import { WSClient, type TextMessage } from '@wecom/aibot-node-sdk'
-import type { ChannelRuntime } from './runtime.js'
+import { channelSecret, type ChannelRuntime } from './runtime.js'
 import type { Destination, ImTransport, Incoming, Reply } from './transport.js'
 
 export interface WecomConfig {
@@ -40,7 +40,7 @@ export class WecomTransport implements ImTransport {
 
 export function startWecom(config: WecomConfig, runtime: ChannelRuntime): void {
   runtime.signal.throwIfAborted()
-  const secret = process.env[config.secretEnv ?? 'WECOM_BOT_SECRET']
+  const secret = channelSecret(runtime, 'secret', config.secretEnv ?? 'WECOM_BOT_SECRET')
   if (!config.botId || !secret) throw new Error('WeCom needs a botId and a bot secret')
   const id = 'wecom/' + config.botId
   const ws = new WSClient({
