@@ -1,0 +1,4 @@
+- insert:
+    - id: dsh-im-gateway
+      name: '@dsh-prism/dsh-im-gateway'
+      config: {}
