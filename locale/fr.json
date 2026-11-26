@@ -1,0 +1,51 @@
+{
+  "meta": {
+    "title": "Passerelle de messagerie Prism",
+    "description": "Associe les messages à des conversations persistantes et transmet les réponses proactives et le suivi des tâches."
+  },
+  "messages": {
+    "help": "Utilisez /models pour voir les modèles, /model NUMÉRO pour changer et /tasks pour voir les tâches.",
+    "task": "Tâche",
+    "queued": "En attente",
+    "running": "En cours",
+    "completed": "Terminée",
+    "failed": "Échec",
+    "user": "Utilisateur",
+    "assistant": "Assistant",
+    "tool": "Outil",
+    "system": "Système",
+    "noModel": "Modèle indisponible. Voir /models.",
+    "currentModel": "Modèle actuel",
+    "selected": "actuel",
+    "modelHint": "Changez avec /model NUMÉRO.",
+    "noTasks": "Aucune tâche en arrière-plan.",
+    "missingTask": "Cette conversation ne contient pas cette tâche.",
+    "trace": "Historique de session (lecture seule)",
+    "noTrace": "La session ne contient encore aucune entrée.",
+    "inspect": "Afficher la session",
+    "paired": "Cette conversation privée est associée.",
+    "language": "Langue de la conversation"
+  },
+  "cli": {
+    "login": "Autorisez le canal en scannant son QR code officiel.",
+    "pair": "Créez une commande privée à usage unique, valable 10 minutes.",
+    "setup": "Activez un bot dans une configuration Prism existante.",
+    "config": "Utilisez im.statePath du fichier. La connexion active aussi le canal.",
+    "state": "Utilisez la base locale indiquée.",
+    "channels": "Canaux",
+    "paired": "Envoyez cette commande au bot en privé dans les 10 minutes.",
+    "onlyQr": "La connexion par QR code est disponible pour wechat et feishu. Utilisez setup pour les autres canaux.",
+    "digits": "Saisissez les chiffres de vérification affichés dans WeChat.",
+    "authorized": "Autorisation réussie. Redémarrez DSH avec la configuration mise à jour.",
+    "enable": "Autorisation réussie. Activez im.{platform} dans DSH.",
+    "configNeeded": "setup nécessite un fichier existant avec --config FILE.",
+    "field": "Saisissez {field} pour {platform}.",
+    "missing": "Champ manquant : {field}.",
+    "env": "Définissez ces variables sur l’hôte DSH : {vars}",
+    "runLogin": "Autorisez le compte avec cette commande : {command}",
+    "enabled": "{platform} est activé. Redémarrez DSH avec la configuration mise à jour.",
+    "pairInfo": "Commande d’association privée, valable 10 minutes",
+    "invalidConfig": "Un fichier de configuration JSON de Prism est nécessaire.",
+    "failed": "Échec de la commande. Vérifiez la configuration et réessayez."
+  }
+}

@@ -8,13 +8,19 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
   },
   "files": [
     "dist/",
     "!dist/*.test.*",
     "!dist/*.tsbuildinfo",
-    "!dist/*probe.*"
+    "!dist/*probe.*",
+    "locale/*.json",
+    "icon.svg",
+    "scripts/prism-im.mjs",
+    "README.zh_CN.md"
   ],
   "engines": {
     "node": ">=24.0.0",
@@ -26,9 +32,22 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.2.0-alpha.1",
     "@deepseek-ai/dsh-home-paths": "0.2.3-alpha.2",
-    "@dsh-prism/dsh-orchestrator": "0.1.0"
+    "@dsh-prism/dsh-orchestrator": "0.1.0",
+    "@deepseek-ai/dsh-host-webserver": "0.2.3-alpha.2"
   },
   "scripts": {
     "build": "tsc -b"
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "1.77.0",
+    "@wecom/aibot-node-sdk": "1.0.7",
+    "discord.js": "14.28.1",
+    "qrcode-terminal": "0.12.0"
+  },
+  "bin": {
+    "prism-im": "./scripts/prism-im.mjs"
+  },
+  "devDependencies": {
+    "ws": "8.23.0"
   }
 }

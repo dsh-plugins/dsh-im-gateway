@@ -1,0 +1,51 @@
+{
+  "meta": {
+    "title": "プリズムメッセージゲートウェイ",
+    "description": "メッセージを継続的な会話に結び付け、能動的な返信とタスク更新を届けます。"
+  },
+  "messages": {
+    "help": "/models でモデル一覧、/model 番号 で切り替え、/tasks でタスクを確認できます。",
+    "task": "タスク",
+    "queued": "待機中",
+    "running": "実行中",
+    "completed": "完了",
+    "failed": "失敗",
+    "user": "ユーザー",
+    "assistant": "アシスタント",
+    "tool": "ツール",
+    "system": "システム",
+    "noModel": "モデルが見つかりません。/models で確認してください。",
+    "currentModel": "現在のモデル",
+    "selected": "使用中",
+    "modelHint": "/model 番号 で切り替えます。",
+    "noTasks": "バックグラウンドタスクはありません。",
+    "missingTask": "この会話に該当するタスクはありません。",
+    "trace": "セッション履歴（読み取り専用）",
+    "noTrace": "まだセッション記録がありません。",
+    "inspect": "セッションを表示",
+    "paired": "この個人チャットを連携しました。",
+    "language": "会話の表示言語"
+  },
+  "cli": {
+    "login": "公式の QR コードを読み取って認証します。",
+    "pair": "個人チャット用の使い捨てコマンドを発行します。有効期間は10分です。",
+    "setup": "既存の Prism 設定でボットを有効にします。",
+    "config": "設定の im.statePath を使います。ログイン後にチャンネルも有効にします。",
+    "state": "指定したローカルデータベースを使います。",
+    "channels": "チャンネル",
+    "paired": "10分以内にこのコマンドをボットとの個人チャットへ送信してください。",
+    "onlyQr": "wechat と feishu は QR ログインに対応しています。他のチャンネルでは setup を使ってください。",
+    "digits": "WeChat に表示された確認番号を入力してください。",
+    "authorized": "認証しました。更新した設定で DSH を再起動してください。",
+    "enable": "認証しました。DSH 設定で im.{platform} を有効にしてください。",
+    "configNeeded": "setup には --config FILE で既存の設定を指定してください。",
+    "field": "{platform} の {field} を入力してください。",
+    "missing": "{field} が必要です。",
+    "env": "DSH ホストで設定する環境変数：{vars}",
+    "runLogin": "アカウントを認証するコマンド：{command}",
+    "enabled": "{platform} を有効にしました。更新した設定で DSH を再起動してください。",
+    "pairInfo": "個人チャット用ペアリングコマンド（10分間有効）",
+    "invalidConfig": "Prism の JSON 設定ファイルが必要です。",
+    "failed": "処理に失敗しました。設定を確認して再試行してください。"
+  }
+}

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">IM gateway</title>
+  <desc id="desc">Two messaging windows exchange messages in opposite directions.</desc>
+  <defs><linearGradient id="ground" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#214F42"/><stop offset="1" stop-color="#102E2B"/></linearGradient></defs>
+  <rect x="3" y="3" width="122" height="122" rx="27" fill="url(#ground)"/>
+  <g stroke-linejoin="round" stroke-linecap="round">
+  <path fill="#C3EED5" d="M17 32h66v37H47L29 81V69H17z"/>
+  <path fill="#397B68" d="M30 44h30v5H30zm0 11h21v5H30z"/>
+  <path fill="#71C5A8" stroke="#153D35" stroke-width="4" d="M52 59h58v34H99v13L81 93H52z"/>
+  <path stroke="#174F41" stroke-width="4" fill="none" d="M94 75H68m7-6-7 6 7 6"/>
+  </g>
+</svg>

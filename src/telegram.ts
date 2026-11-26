@@ -3,7 +3,9 @@ import type { ImGateway } from './gateway.js'
 import type { GatewayState } from './state.js'
 import type { Destination, ImTransport, Incoming, Reply } from './transport.js'
 
-interface User { id: number; is_bot: boolean }
+import type { ChannelRuntime } from './runtime.js'
+export interface TelegramConfig { tokenEnv?: string; allowedUserIds?: string[] }
+interface User { id: number; is_bot: boolean; language_code?: string }
 interface Chat { type: string; id: number }
 interface Update {
   update_id: number
@@ -33,17 +35,18 @@ export class TelegramTransport implements ImTransport {
     allowedUserIds: string[],
     private readonly signal: AbortSignal,
     private readonly request: typeof fetch = fetch,
+    private readonly paired?: (target: Destination) => boolean,
   ) {
     const bot = /^(\d+):[\w-]+$/.exec(token)?.[1]
     if (!bot) throw new Error('Invalid Telegram bot token format')
-    if (!Array.isArray(allowedUserIds) || !allowedUserIds.length || allowedUserIds.some(id => !/^\d+$/.test(id))) {
+    if (!Array.isArray(allowedUserIds) || allowedUserIds.some(id => !/^\d+$/.test(id))) {
       throw new Error('Configure Telegram allowedUserIds with numeric private user IDs')
     }
     this.id = 'telegram/' + bot
     this.allowed = new Set(allowedUserIds.map(String))
   }
 
-  permits({ user, chat }: Destination) { return chat === user && this.allowed.has(user) }
+  permits({ user, chat }: Destination) { return chat === user && (this.allowed.has(user) || !!this.paired?.({ chat, user })) }
 
   private async api<T>(method: string, params: Record<string, unknown>): Promise<T> {
     const response = await this.request('https://api.telegram.org/bot' + this.token + '/' + method, {
@@ -67,7 +70,7 @@ export class TelegramTransport implements ImTransport {
       chat_id: target.chat,
       text: reply.text + (reply.inspectTask && !buttonFits ? '\n/inspect ' + reply.inspectTask : ''),
       link_preview_options: { is_disabled: true },
-      ...(buttonFits && { reply_markup: { inline_keyboard: [[{ text: '查看只读会话', callback_data: data }]] } }),
+      ...(buttonFits && { reply_markup: { inline_keyboard: [[{ text: reply.inspectLabel ?? '查看只读会话', callback_data: data }]] } }),
     }
   }
 
@@ -94,9 +97,10 @@ export class TelegramTransport implements ImTransport {
     const user = callback ? callback.from : update.message?.from
     if (chat?.type !== 'private' || !user || user.is_bot || !Number.isSafeInteger(user.id) || !Number.isSafeInteger(chat.id)) return
     const target = { user: String(user.id), chat: String(chat.id) }
-    if (!this.permits(target)) return
+    if (chat.id !== user.id) return
     const text = callback ? (callback.data?.startsWith('t:') ? '/inspect ' + callback.data.slice(2) : undefined) : update.message?.text
-    if (text?.trim()) return { ...target, id: String(update.update_id), text }
+    if (!this.permits(target) && !(!callback && /^\/pair [a-f0-9]{20}$/i.test(text?.trim() ?? ''))) return
+    if (text?.trim()) return { ...target, id: String(update.update_id), text, ...(user.language_code && { locale: user.language_code }) }
   }
 
   /** Telegram acknowledges updates on the next poll with a higher offset. */
@@ -126,4 +130,12 @@ export class TelegramTransport implements ImTransport {
       }
     }
   }
+}
+
+export function startTelegram(options: TelegramConfig, runtime: ChannelRuntime): Promise<void> {
+  const token = process.env[options.tokenEnv ?? 'TELEGRAM_BOT_TOKEN'] ?? runtime.state.get('telegram/token')
+  if (!token) throw new Error('Missing Telegram bot token')
+  const channel = 'telegram/' + token.split(':')[0]
+  const transport = new TelegramTransport(token, options.allowedUserIds ?? [], runtime.signal, fetch, runtime.access(channel))
+  return transport.poll(runtime.mount(transport), runtime.state, () => runtime.warn('Telegram polling paused; retrying'))
 }

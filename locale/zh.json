@@ -1,0 +1,52 @@
+{
+  "meta": {
+    "title": "棱镜即时消息网关",
+    "description": "将即时消息映射到持久对话，并投递主动回复与任务状态。",
+    "detail": "README.zh_CN.md"
+  },
+  "messages": {
+    "help": "/models 可查看可选模型，/model 序号 可切换。/tasks 可查看后台任务。",
+    "task": "任务",
+    "queued": "排队中",
+    "running": "进行中",
+    "completed": "已完成",
+    "failed": "失败",
+    "user": "用户",
+    "assistant": "助手",
+    "tool": "工具",
+    "system": "系统",
+    "noModel": "未找到该模型。使用 /models 查看列表。",
+    "currentModel": "当前模型为",
+    "selected": "当前",
+    "modelHint": "使用 /model 序号 切换。",
+    "noTasks": "暂无后台任务。",
+    "missingTask": "此对话中没有该任务。",
+    "trace": "会话记录（只读）",
+    "noTrace": "这项任务暂无会话记录。",
+    "inspect": "查看只读会话",
+    "paired": "此私聊已完成配对。",
+    "language": "会话界面语言"
+  },
+  "cli": {
+    "login": "扫描平台提供的二维码，在本机完成授权。",
+    "pair": "生成一次性私聊配对命令，10 分钟内有效。",
+    "setup": "在已有的 Prism 配置中启用机器人。",
+    "config": "使用配置中的 im.statePath；登录成功后启用通道。",
+    "state": "使用指定的本地数据库。",
+    "channels": "支持的通道",
+    "paired": "请在 10 分钟内将此命令私发给机器人。",
+    "onlyQr": "微信和飞书支持扫码登录。其他通道请使用 setup。",
+    "digits": "请输入微信中显示的验证数字。",
+    "authorized": "授权成功。请使用更新后的配置重启 DSH。",
+    "enable": "授权成功。请在 DSH 配置中启用 im.{platform}。",
+    "configNeeded": "setup 需要使用 --config FILE 指定已有配置。",
+    "field": "请输入 {platform} 的 {field}。",
+    "missing": "缺少 {field}。",
+    "env": "请在 DSH 宿主中设置这些环境变量：{vars}",
+    "runLogin": "请运行此命令授权账户：{command}",
+    "enabled": "已启用 {platform}。请使用更新后的配置重启 DSH。",
+    "pairInfo": "私聊配对命令，10 分钟内有效",
+    "invalidConfig": "需要有效的 Prism JSON 配置文件。",
+    "failed": "操作失败。请检查配置后重试。"
+  }
+}

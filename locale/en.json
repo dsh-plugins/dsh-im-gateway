@@ -1,0 +1,52 @@
+{
+  "meta": {
+    "title": "Prism messaging gateway",
+    "description": "Connect messages to persistent conversations and deliver proactive replies and task updates.",
+    "detail": "README.md"
+  },
+  "messages": {
+    "help": "Use /models to list models, /model NUMBER to switch and /tasks to view tasks.",
+    "task": "Task",
+    "queued": "Queued",
+    "running": "Running",
+    "completed": "Completed",
+    "failed": "Failed",
+    "user": "User",
+    "assistant": "Assistant",
+    "tool": "Tool",
+    "system": "System",
+    "noModel": "Model unavailable. See /models.",
+    "currentModel": "Current model",
+    "selected": "current",
+    "modelHint": "Switch with /model NUMBER.",
+    "noTasks": "No background tasks.",
+    "missingTask": "No such task in this conversation.",
+    "trace": "Session history (read only)",
+    "noTrace": "No session entries yet.",
+    "inspect": "View read-only session",
+    "paired": "This private chat is paired.",
+    "language": "Conversation language"
+  },
+  "cli": {
+    "login": "Authorize the channel by scanning its official QR code.",
+    "pair": "Issue a single-use command for a private chat, valid for 10 minutes.",
+    "setup": "Enable a bot in an existing Prism configuration.",
+    "config": "Use the configured im.statePath. Login also enables the channel.",
+    "state": "Use the specified local database.",
+    "channels": "Channels",
+    "paired": "Send this command privately to your bot within 10 minutes.",
+    "onlyQr": "QR login supports wechat and feishu. Use setup for other channels.",
+    "digits": "Enter the verification digits shown by WeChat.",
+    "authorized": "Authorized. Restart DSH with the updated configuration.",
+    "enable": "Authorized. Enable im.{platform} in your DSH configuration.",
+    "configNeeded": "setup requires an existing --config FILE.",
+    "field": "Enter {platform} {field}.",
+    "missing": "Missing {field}.",
+    "env": "Set these environment variables on the DSH host: {vars}",
+    "runLogin": "Run this command to authorize the account: {command}",
+    "enabled": "Enabled {platform}. Restart DSH with the updated configuration.",
+    "pairInfo": "Private pairing command, valid for 10 minutes",
+    "invalidConfig": "Expected a Prism JSON configuration.",
+    "failed": "Command failed. Check your setup and try again."
+  }
+}

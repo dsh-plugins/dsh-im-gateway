@@ -1,0 +1,51 @@
+{
+  "meta": {
+    "title": "Prism-Nachrichtengateway",
+    "description": "Ordnet Nachrichten dauerhaften Unterhaltungen zu und stellt aktive Antworten und Aufgabenmeldungen zu."
+  },
+  "messages": {
+    "help": "Mit /models Modelle anzeigen, mit /model NUMMER wechseln und mit /tasks Aufgaben anzeigen.",
+    "task": "Aufgabe",
+    "queued": "Wartet",
+    "running": "Läuft",
+    "completed": "Abgeschlossen",
+    "failed": "Fehlgeschlagen",
+    "user": "Benutzer",
+    "assistant": "Assistent",
+    "tool": "Werkzeug",
+    "system": "System",
+    "noModel": "Modell nicht verfügbar. Siehe /models.",
+    "currentModel": "Aktuelles Modell",
+    "selected": "aktuell",
+    "modelHint": "Mit /model NUMMER wechseln.",
+    "noTasks": "Keine Hintergrundaufgaben.",
+    "missingTask": "Keine solche Aufgabe in diesem Gespräch.",
+    "trace": "Sitzungsverlauf (schreibgeschützt)",
+    "noTrace": "Noch keine Einträge.",
+    "inspect": "Sitzung ansehen",
+    "paired": "Dieser private Chat ist gekoppelt.",
+    "language": "Sprache der Unterhaltung"
+  },
+  "cli": {
+    "login": "Mit dem offiziellen QR-Code des Dienstes autorisieren.",
+    "pair": "Einmaligen Befehl für einen privaten Chat ausgeben, 10 Minuten gültig.",
+    "setup": "Bot in einer vorhandenen Prism-Konfiguration aktivieren.",
+    "config": "Den konfigurierten im.statePath verwenden. Die Anmeldung aktiviert den Kanal.",
+    "state": "Die angegebene lokale Datenbank verwenden.",
+    "channels": "Kanäle",
+    "paired": "Senden Sie diesen Befehl innerhalb von 10 Minuten privat an den Bot.",
+    "onlyQr": "QR-Anmeldung ist für wechat und feishu verfügbar. Verwenden Sie sonst setup.",
+    "digits": "Geben Sie die in WeChat angezeigten Ziffern ein.",
+    "authorized": "Autorisierung erfolgreich. Starten Sie DSH mit der neuen Konfiguration neu.",
+    "enable": "Autorisierung erfolgreich. Aktivieren Sie im.{platform} in DSH.",
+    "configNeeded": "setup benötigt eine bestehende Datei über --config FILE.",
+    "field": "Geben Sie {field} für {platform} ein.",
+    "missing": "{field} fehlt.",
+    "env": "Setzen Sie auf dem DSH-Host diese Umgebungsvariablen: {vars}",
+    "runLogin": "Autorisieren Sie das Konto mit: {command}",
+    "enabled": "{platform} ist aktiviert. Starten Sie DSH mit der neuen Konfiguration neu.",
+    "pairInfo": "Privater Kopplungsbefehl, 10 Minuten gültig",
+    "invalidConfig": "Eine Prism-Konfiguration im JSON-Format wird benötigt.",
+    "failed": "Vorgang fehlgeschlagen. Prüfen Sie die Konfiguration und versuchen Sie es erneut."
+  }
+}

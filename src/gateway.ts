@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto'
 import type { ConversationView, TraceEntry } from '@dsh-prism/dsh-orchestrator'
+import { localeOf, locales, messages, type Locale } from './i18n.js'
 import { GatewayState, principal } from './state.js'
 import { splitText, type Destination, type Incoming, type ImTransport, type Reply } from './transport.js'
 
@@ -10,16 +12,13 @@ export interface ConversationService {
   subscribe(owner: string, changed: (snapshot: ConversationView) => void): () => void
 }
 
-const labels = { queued: '排队中', running: '进行中', completed: '已完成', failed: '失败' }
-const help = '/models 可查看可选模型，/model 序号 可切换。/tasks 可查看后台任务。'
-const roleNames: Record<string, string> = { user: '用户', assistant: '助手', tool: '工具', system: '系统' }
-
 export class ImGateway {
   private readonly watchers = new Map<string, () => void>()
   private readonly pending = new Map<string, Promise<void>>()
   private readonly inbound = new Map<string, Promise<void>>()
   private readonly dirty = new Set<string>()
   private readonly retries = new Map<string, NodeJS.Timeout>()
+  private readonly inputRetries = new Map<string, NodeJS.Timeout>()
   private closed = false
 
   constructor(
@@ -27,12 +26,14 @@ export class ImGateway {
     private readonly state: GatewayState,
     private readonly transport: ImTransport,
     private readonly onDeliveryError: () => void = () => {},
+    private readonly defaultLocale: Locale = 'zh',
   ) {}
 
   start() {
     for (const target of this.state.list(this.transport.id)) {
       if (!this.transport.permits(target)) continue
       this.watch(target)
+      void this.drain(target).catch(() => {})
       this.wake(target)
     }
   }
@@ -69,6 +70,7 @@ export class ImGateway {
     const owner = principal(this.transport.id, target)
     const previous = this.state.receipt(owner, key)
     if (previous?.version === version) return
+    reply = { ...reply, deliveryId: createHash('sha256').update(JSON.stringify([owner, key, version])).digest('hex') }
     let remote = previous?.remote
     if (remote) remote = await this.transport.edit(target, remote, reply)
     else remote = await this.transport.send(target, reply)
@@ -76,33 +78,60 @@ export class ImGateway {
   }
 
   private async sendText(target: Destination, key: string, text: string) {
-    for (const [i, part] of splitText(text).entries()) {
+    for (const [i, part] of splitText(text, this.transport.maxTextLength ?? 4000, this.transport.maxTextBytes).entries()) {
       await this.deliver(target, key + '/' + i, { text: part })
     }
   }
 
+  private language(owner: string): Locale {
+    return localeOf(this.state.get('language/' + owner)) ?? localeOf(this.state.get('detected/' + owner)) ?? this.defaultLocale
+  }
+
   private async flush(target: Destination) {
+    if (!this.transport.permits(target)) return
     const owner = principal(this.transport.id, target)
     const view = await this.core.view(owner)
     for (const item of view.messages) {
       if (item.role === 'assistant') await this.sendText(target, 'out/' + item.id, item.text)
     }
+    const m = messages(this.language(owner))
     for (const task of view.tasks) {
-      const title = splitText(task.title, 800)[0] ?? '后台任务'
-      const text = '任务 · ' + labels[task.status] + '\n' + title
-      await this.deliver(target, 'task/' + task.id, { text, inspectTask: task.id }, text)
+      const title = splitText(task.title, 800)[0] ?? m.task
+      const text = m.task + ' · ' + m[task.status] + '\n' + title
+      await this.deliver(target, 'task/' + task.id, { text, inspectTask: task.id, inspectLabel: m.inspect }, text)
     }
   }
 
   async receive(input: Incoming): Promise<void> {
-    if (this.closed || !this.transport.permits(input) || !input.text.trim()) return
-    const owner = principal(this.transport.id, input)
-    // Webhook transports can deliver concurrently, including the same event twice.
+    if (this.closed || !input.text.trim()) return
+    if (!this.transport.permits(input)) {
+      const code = /^\/pair\s+([a-f0-9]{20})$/i.exec(input.text.trim())?.[1]
+      if (!code || !this.state.claim(this.transport.id, input, code) || !this.transport.permits(input)) return
+    }
+    // A pushed frame may be the platform's only delivery. Persist it before the first await.
+    const saved = /^\/pair(?:\s|$)/i.test(input.text) ? { ...input, text: '/pair' } : input
+    this.state.enqueue(this.transport.id, saved)
+    await this.drain(input)
+  }
+
+  private async drain(target: Destination) {
+    const owner = principal(this.transport.id, target)
     const previous = this.inbound.get(owner)
-    const next = (previous ?? Promise.resolve()).catch(() => {}).then(() => this.process(owner, input))
+    const next = (previous ?? Promise.resolve()).catch(() => {}).then(async () => {
+      if (!this.transport.permits(target)) return
+      for (const item of this.state.pendingInputs(owner)) await this.process(owner, item)
+    })
     this.inbound.set(owner, next)
     try {
       await next
+    } catch (error) {
+      if (!this.closed && !this.inputRetries.has(owner)) {
+        this.inputRetries.set(owner, setTimeout(() => {
+          this.inputRetries.delete(owner)
+          void this.drain(target).catch(() => {})
+        }, 5000).unref())
+      }
+      throw error
     } finally {
       if (this.inbound.get(owner) === next) this.inbound.delete(owner)
     }
@@ -110,10 +139,9 @@ export class ImGateway {
 
   private async process(owner: string, input: Incoming) {
     const target = { chat: input.chat, user: input.user }
-    this.state.bind(this.transport.id, target)
+    const detected = localeOf(input.locale)
+    if (detected) this.state.set('detected/' + owner, detected)
     this.watch(target)
-    const request = 'in/' + input.id
-    if (this.state.receipt(owner, request)) return
     const match = /^\/(\w+)(?:@\w+)?(?:\s+([\s\S]*))?$/.exec(input.text.trim())
     if (match) {
       const reply = await this.command(owner, match[1]!, match[2]?.trim() ?? '')
@@ -121,42 +149,52 @@ export class ImGateway {
     } else {
       await this.core.message(owner, input.text, input.id)
     }
-    this.state.delivered(owner, request, 'processed')
+    this.state.finishInput(owner, input.id)
     this.wake(target)
   }
 
   private async command(owner: string, name: string, arg: string): Promise<string> {
+    const m = messages(this.language(owner))
+    if (name === 'pair') return m.paired
+    if (name === 'language') {
+      const language = localeOf(arg)
+      if (!language) return m.language + ' · ' + this.language(owner) + '\n/language ' + locales.join(' | ')
+      this.state.set('language/' + owner, language)
+      return messages(language).language + ' · ' + language
+    }
     if (name === 'models' || name === 'model') {
       const { modelId, models } = await this.core.view(owner)
       if (name === 'model' && arg) {
         const model = models.find(m => m.id === arg) ?? (/^[1-9]\d*$/.test(arg) ? models[Number(arg) - 1] : undefined)
-        if (!model) return '未找到该模型。使用 /models 查看列表。'
+        if (!model) return m.noModel
         await this.core.selectModel(owner, model.id)
-        return '当前模型为 ' + model.id
+        return m.currentModel + ' ' + model.id
       }
-      return models.map((m, i) => (i + 1) + '. ' + m.id + (m.id === modelId ? '（当前）' : '') +
-        '\n' + m.description).join('\n\n') + '\n\n使用 /model 序号 切换。'
+      return models.map((model, i) => (i + 1) + '. ' + model.id + (model.id === modelId ? ' (' + m.selected + ')' : '') +
+        '\n' + model.description).join('\n\n') + '\n\n' + m.modelHint
     }
     if (name === 'tasks') {
       const { tasks } = await this.core.view(owner)
-      return tasks.length ? tasks.map(t => labels[t.status] + ' · ' + t.title + '\n/inspect ' + t.id).join('\n\n') : '暂无后台任务。'
+      return tasks.length ? tasks.map(t => m[t.status] + ' · ' + t.title + '\n/inspect ' + t.id).join('\n\n') : m.noTasks
     }
     if (name === 'inspect') {
       const { tasks } = await this.core.view(owner)
-      if (!arg || !tasks.some(t => t.id === arg)) return '此对话中没有该任务。'
+      if (!arg || !tasks.some(t => t.id === arg)) return m.missingTask
       const trace = await this.core.trace(owner, arg)
-      return trace.length ? '会话记录（只读）\n\n' +
-        trace.map(line => (roleNames[line.role] ?? line.role) + ' · ' + line.text).join('\n\n') : '这项任务暂无会话记录。'
+      return trace.length ? m.trace + '\n\n' +
+        trace.map(line => (['user', 'assistant', 'tool', 'system'].includes(line.role) ? m[line.role as 'user' | 'assistant' | 'tool' | 'system'] : line.role) + ' · ' + line.text).join('\n\n') : m.noTrace
     }
-    return help
+    return m.help + '\n/language ' + locales.join(' | ')
   }
 
   async close() {
     this.closed = true
     for (const unwatch of this.watchers.values()) unwatch()
-    for (const timer of this.retries.values()) clearTimeout(timer)
+    for (const timers of [this.retries, this.inputRetries]) {
+      for (const timer of timers.values()) clearTimeout(timer)
+      timers.clear()
+    }
     await Promise.allSettled([...this.inbound.values(), ...this.pending.values()])
     this.watchers.clear()
-    this.retries.clear()
   }
 }

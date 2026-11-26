@@ -1,0 +1,51 @@
+{
+  "meta": {
+    "title": "Gateway de mensagens do Prism",
+    "description": "Vincula mensagens a conversas persistentes e entrega respostas proativas e atualizações das tarefas."
+  },
+  "messages": {
+    "help": "Use /models para listar modelos, /model NÚMERO para mudar e /tasks para ver tarefas.",
+    "task": "Tarefa",
+    "queued": "Na fila",
+    "running": "Em andamento",
+    "completed": "Concluída",
+    "failed": "Falhou",
+    "user": "Usuário",
+    "assistant": "Assistente",
+    "tool": "Ferramenta",
+    "system": "Sistema",
+    "noModel": "Modelo indisponível. Consulte /models.",
+    "currentModel": "Modelo atual",
+    "selected": "atual",
+    "modelHint": "Mude com /model NÚMERO.",
+    "noTasks": "Nenhuma tarefa em segundo plano.",
+    "missingTask": "Esta conversa não contém essa tarefa.",
+    "trace": "Histórico da sessão (somente leitura)",
+    "noTrace": "Ainda não há registros da sessão.",
+    "inspect": "Ver sessão de leitura",
+    "paired": "Esta conversa privada está vinculada.",
+    "language": "Idioma da conversa"
+  },
+  "cli": {
+    "login": "Autorize o canal lendo o código QR oficial.",
+    "pair": "Gere um comando de uso único para conversa privada, válido por 10 minutos.",
+    "setup": "Ative um bot em uma configuração existente do Prism.",
+    "config": "Use o im.statePath configurado. O login também ativa o canal.",
+    "state": "Use o banco de dados local indicado.",
+    "channels": "Canais",
+    "paired": "Envie este comando ao bot em uma conversa privada dentro de 10 minutos.",
+    "onlyQr": "O login por QR funciona com wechat e feishu. Para outros canais, use setup.",
+    "digits": "Digite os números de verificação exibidos no WeChat.",
+    "authorized": "Autorização concluída. Reinicie o DSH com a configuração atualizada.",
+    "enable": "Autorização concluída. Ative im.{platform} na configuração do DSH.",
+    "configNeeded": "setup precisa de um arquivo existente com --config FILE.",
+    "field": "Informe {field} de {platform}.",
+    "missing": "Falta {field}.",
+    "env": "Defina estas variáveis no host do DSH: {vars}",
+    "runLogin": "Autorize a conta com este comando: {command}",
+    "enabled": "{platform} foi ativado. Reinicie o DSH com a configuração atualizada.",
+    "pairInfo": "Comando de vinculação privada, válido por 10 minutos",
+    "invalidConfig": "É necessária uma configuração JSON do Prism.",
+    "failed": "Falha no comando. Confira a configuração e tente novamente."
+  }
+}
