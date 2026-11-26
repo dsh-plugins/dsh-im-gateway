@@ -36,7 +36,8 @@
     "@deepseek-ai/dsh-host-webserver": "0.2.3-alpha.2"
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b tsconfig.release.json",
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "1.77.0",
@@ -48,6 +49,12 @@
     "prism-im": "./scripts/prism-im.mjs"
   },
   "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "6.0.3",
     "ws": "8.23.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dsh-plugins/dsh-im-gateway.git"
   }
 }
