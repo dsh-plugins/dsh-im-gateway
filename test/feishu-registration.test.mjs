@@ -12,7 +12,7 @@ import { WebSocketServer } from 'ws'
 import { GatewayState } from '../dist/state.js'
 
 const run = promisify(execFile)
-const fixture = fileURLToPath(new URL('./fixtures/feishu-service.mjs', import.meta.url))
+const fixture = new URL('./fixtures/feishu-service.mjs', import.meta.url).href
 const cli = fileURLToPath(new URL('../scripts/prism-im.mjs', import.meta.url))
 
 test('native CLI registers a Lark app, writes its config and reopens the private channel with the saved credentials', { timeout: 12000 }, async t => {
@@ -41,7 +41,9 @@ test('native CLI registers a Lark app, writes its config and reopens the private
   const { im } = JSON.parse(bytes)
   assert.deepEqual(im, { statePath: './data/im.sqlite', locale: 'en', feishu: { allowedUserIds: ['ou_allow'] } })
   const database = join(dir, im.statePath)
-  assert.equal((await stat(database)).mode & 0o777, 0o600)
+  if (process.platform !== 'win32') {
+    assert.equal((await stat(database)).mode & 0o777, 0o600)
+  }
   const state = new GatewayState(database)
   try {
     assert.equal(JSON.parse(state.get('feishu/registration')).openId, 'ou_scan')
