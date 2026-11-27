@@ -1,7 +1,7 @@
 {
   "name": "@dsh-prism/dsh-im-gateway",
   "description": "Connect Prism to seven messaging channels for private conversations and task updates.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -35,7 +35,7 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.2.0-alpha.1",
     "@deepseek-ai/dsh-home-paths": "0.2.3-alpha.2",
-    "@dsh-prism/dsh-orchestrator": "^0.1.0",
+    "@dsh-prism/dsh-orchestrator": "^0.2.0",
     "@deepseek-ai/dsh-host-webserver": "0.2.3-alpha.2"
   },
   "scripts": {

@@ -12,7 +12,7 @@
 
 ## 在 DSH 网页端安装
 
-在 DSH 的 **插件 → 添加插件** 中按安装指南列出的顺序安装并启用五个 `@dsh-prism` 包。此包可按完整包名 `@dsh-prism/dsh-im-gateway@0.1.1` 安装。[前端安装图解](https://prism.dsh-plug.in/zh/guide/start)
+在 DSH 的 **插件 → 添加插件** 中按安装指南列出的顺序安装并启用所需的 `@dsh-prism` 包。输入 `@dsh-prism/dsh-im-gateway@0.2.0` 安装此包。[前端安装图解](https://prism.dsh-plug.in/zh/guide/start)
 
 进入 **设置 → 棱镜/IM → 添加 IM**，选择 Telegram、微信、飞书 / Lark、企业微信、QQ 机器人、OneBot 或 Discord。飞书的 **扫码绑定** 支持在授权页面选择已有机器人或创建机器人，**手动绑定** 用于填写已有应用的凭据。启用渠道后，用户直接私聊机器人。首次私聊会出现在 **待审批用户** 中，选择 **同意** 后棱镜处理首条消息。[各渠道配置图解](https://prism.dsh-plug.in/zh/guide/im)
 

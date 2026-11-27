@@ -12,7 +12,7 @@ English | [简体中文](README.zh_CN.md)
 
 ## Install in the DSH web app
 
-Open **Plugins → Add plugin** and install and enable the five `@dsh-prism` packages in the order shown in the guide. To install this package, enter `@dsh-prism/dsh-im-gateway@0.1.1`. [Illustrated installation guide](https://prism.dsh-plug.in/guide/start)
+Open **Plugins → Add plugin** and enable the required `@dsh-prism` packages in the order shown in the guide. To install this package, enter `@dsh-prism/dsh-im-gateway@0.2.0`. [Illustrated installation guide](https://prism.dsh-plug.in/guide/start)
 
 Open **Settings → Prism/IM → Add IM** and choose Telegram, WeChat, Feishu / Lark, WeCom, QQ Bot, OneBot or Discord. For Feishu, use **QR binding** to select or create a bot on the authorization page, or use **Manual binding** to enter an existing app’s credentials. Once the channel is enabled, users can message the bot directly. The first message creates a request under **Pending approvals**, and Prism processes the message after you choose **Approve**. [Messaging channel walkthrough](https://prism.dsh-plug.in/guide/im)
 
