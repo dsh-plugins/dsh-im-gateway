@@ -49,7 +49,7 @@ export function apply(ctx: Context, config: Config = {}) {
     if (config.managed) {
       const server = ctx.get('webServer', true)
       if (!server) throw new Error('DSH Web host required for IM settings')
-      login = new LoginAdmin(state, channel => runner.registered(channel))
+      login = new LoginAdmin(state, channel => runner.registered(channel), {revision: channel => runner.view(channel).revision})
       unmount = server.register(adminRoute({
         list: () => runner.list(), save: (channel, body) => runner.save(channel, body),
         approvals: () => state.approvals(), decideApproval: (id, decision) => runner.decideApproval(id, decision),

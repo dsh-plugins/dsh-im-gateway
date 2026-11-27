@@ -11,18 +11,20 @@ export interface FeishuConfig {
   allowedUsers?: string[]
 }
 
-type Registration = { appId: string; appSecret: string; domain: 'feishu' | 'lark'; openId?: string }
+/** 服务端用于认证飞书或 Lark 开放平台的应用凭据。 */
+export interface FeishuCredentials { appId: string; appSecret: string; domain: 'feishu' | 'lark' }
+type Registration = FeishuCredentials & { openId?: string }
 const registrationKey = 'feishu/registration'
 
 /** The SDK polls Feishu's app registration endpoint and switches domains for Lark tenants. */
 export async function loginFeishu(
   state: Pick<GatewayState, 'set'>, onCode: (url: string, expireIn?: number) => void, signal?: AbortSignal,
-  register: typeof Lark.registerApp = Lark.registerApp,
+  register: typeof Lark.registerApp = Lark.registerApp, {allowExisting = false}: {allowExisting?: boolean} = {},
 ): Promise<Omit<Registration, 'appSecret'>> {
   signal?.throwIfAborted()
   let domain: Registration['domain'] = 'feishu'
   const result = await register({
-    createOnly: true, source: 'dsh-prism', signal,
+    createOnly: !allowExisting, source: 'dsh-prism', signal,
     appPreset: { name: 'DSH Prism' },
     addons: {
       preset: false,

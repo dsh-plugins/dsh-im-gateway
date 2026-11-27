@@ -9,14 +9,16 @@ export interface LoginView { loginId: string; channel: Channel; status: Status; 
 interface Session {
   view: LoginView
   controller: AbortController
+  revision?: number
   timer?: NodeJS.Timeout
   code?: PromiseWithResolvers<string>
 }
 type Driver = (staging: GatewayState, showQr: (url: string, expireIn?: number) => void, askCode: () => Promise<string>, signal: AbortSignal) => Promise<unknown>
-interface Options { drivers?: Partial<Record<Channel, Driver>>; timeoutMs?: number }
+interface Options { drivers?: Partial<Record<Channel, Driver>>; timeoutMs?: number; revision?(channel: Channel): number }
 const defaults: Record<Channel, Driver> = {
   wechat: loginWechat,
-  feishu: async (staging, showQr, _askCode, signal) => (await import('./feishu.js')).loginFeishu(staging, showQr, signal),
+  feishu: async (staging, showQr, _askCode, signal) =>
+    (await import('./feishu.js')).loginFeishu(staging, showQr, signal, undefined, {allowExisting: true}),
 }
 const trustedQrHosts = {
   wechat: /(^|\.)(weixin\.qq\.com|wechat\.com)$/,
@@ -99,8 +101,9 @@ export class LoginAdmin {
       this.checkDeadline(session)
       signal.throwIfAborted()
       const registration = staging.get(key)
-      if (!registration || this.state.get(key) !== previous) throw new Error('Registration was missing or changed')
-      this.state.set(key, registration)
+      if (!registration || session.revision !== this.options.revision?.(channel) || !this.state.compareAndSet(key, previous, registration)) {
+        throw new Error('扫码期间注册凭据或渠道配置已变化')
+      }
       this.finish(session, 'complete')
       await this.onComplete(channel)
     } catch (error) {
@@ -124,6 +127,7 @@ export class LoginAdmin {
       const next: Session = {
         view: { loginId: randomUUID(), channel, status: 'starting', expiresAt: Date.now() + timeout },
         controller: new AbortController(),
+        revision: this.options.revision?.(channel),
       }
       this.sessions.set(channel, next)
       this.armDeadline(next, next.view.expiresAt)
