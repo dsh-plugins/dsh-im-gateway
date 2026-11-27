@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { attachment, maxMediaCount, mediaFields, mediaResponse, platformMediaUrl, qqMediaHosts } from '../media.js'
 import { requiredSecret, type ChannelRuntime } from '../runtime.js'
 import type { Destination, Incoming, Reply } from '../transport.js'
 import { CallbackError, messageText, signedEvents } from './signed-events.js'
@@ -70,6 +71,13 @@ export function startOneBot(config: OneBotConfig, runtime: ChannelRuntime): void
   }
   const gateway = runtime.mount({
     id, permits, send, edit: (target, _previous, reply) => send(target,reply),
+    async readAttachment(target, _messageId, reference) {
+      const url = platformMediaUrl(reference.resource, qqMediaHosts)
+      if (!permits(target) || !url) { throw new Error('OneBot 附件不可读取') }
+      return mediaResponse(await fetch(url, {
+        redirect: 'error', signal: AbortSignal.any([runtime.signal, AbortSignal.timeout(15000)]),
+      }), reference)
+    },
   })
   runtime.webhook('/prism/im/onebot', signedEvents((headers, raw) => {
     const sig = headers['x-signature']
@@ -83,8 +91,14 @@ export function startOneBot(config: OneBotConfig, runtime: ChannelRuntime): void
     if (!user || user === selfId || (sender?.user_id !== undefined && qqNumber(sender.user_id) !== user) ||
         !Number.isSafeInteger(event.message_id)) return {}
     const text = textOnly(event.message)
-    if (text.trim()) {
-      const input: Incoming = {chat:user,user,id:String(event.message_id),text,
+    const resources = Array.isArray(event.message)
+      ? mediaFields(event.message.filter(part => ['image', 'video', 'file', 'record'].includes(part?.type))
+        .slice(0, maxMediaCount + 1).map(part => attachment(platformMediaUrl(part?.data?.url, qqMediaHosts)?.href, {
+          name: part?.data?.name, kind: part.type === 'image' ? 'image' : undefined,
+        })))
+      : {mediaUnavailable: typeof event.message === 'string' && /\[CQ:(?:image|video|file|record),/u.test(event.message) || undefined} as const
+    if (text.trim() || ('attachments' in resources && resources.attachments) || resources.mediaUnavailable) {
+      const input: Incoming = {chat:user,user,id:String(event.message_id),text,...resources,
         ...(typeof sender?.nickname === 'string' && {username:sender.nickname})}
       await gateway.receive(input)
     }

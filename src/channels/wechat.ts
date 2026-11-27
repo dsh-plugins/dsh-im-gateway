@@ -1,5 +1,7 @@
-import { randomBytes, randomUUID } from 'node:crypto'
+import { createDecipheriv, randomBytes, randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
+import { ExpiringMedia } from '../expiring-media.js'
+import { attachment, maxMediaCount, mediaFields, platformMediaUrl } from '../media.js'
 import type { ChannelRuntime } from '../runtime.js'
 import type { GatewayState } from '../state.js'
 import type { Destination, ImTransport, Reply } from '../transport.js'
@@ -9,6 +11,14 @@ const defaultOrigin = 'https://ilinkai.weixin.qq.com'
 const registrationKey = 'wechat/registration'
 interface Registration { botId: string; token: string; origin: string; user?: string }
 export interface WechatConfig { allowedUserIds?: string[] }
+interface WeixinResource { encrypt_query_param?: string; aes_key?: string; full_url?: string }
+interface WeixinItem {
+  type: number
+  text_item?: {text?: string}
+  image_item?: {media?: WeixinResource; aeskey?: string; mid_size?: number; url?: string}
+  file_item?: {media?: WeixinResource; file_name?: string; len?: string}
+  video_item?: {media?: WeixinResource; video_size?: number}
+}
 interface WeixinMessage {
   message_id?: string
   message_type?: number
@@ -16,7 +26,43 @@ interface WeixinMessage {
   to_user_id?: string
   group_id?: string
   context_token?: string
-  item_list?: { type: number; text_item?: { text?: string } }[]
+  item_list?: WeixinItem[]
+}
+
+const cdn = 'https://novac2c.cdn.weixin.qq.com/c2c/download'
+const cdnHosts = new Set(['novac2c.cdn.weixin.qq.com'])
+
+function mediaItem(item: WeixinItem) {
+  const media = item.image_item?.media ?? item.file_item?.media ?? item.video_item?.media
+  const full = platformMediaUrl(media?.full_url ?? item.image_item?.url, cdnHosts)
+  let url = full?.pathname === '/c2c/download' ? full : undefined
+  if (!url && typeof media?.encrypt_query_param === 'string' && media.encrypt_query_param.length <= 3000) {
+    url = new URL(cdn)
+    url.searchParams.set('encrypted_query_param', media.encrypt_query_param)
+  }
+  const reference = attachment(url?.href, {
+    kind: item.type === 2 ? 'image' : 'file',
+    name: item.file_item?.file_name,
+    size: item.image_item?.mid_size ?? item.video_item?.video_size ??
+      (item.file_item?.len ? Number(item.file_item.len) : undefined),
+  })
+  if (!url || !reference) { return }
+  const override = item.image_item?.aeskey
+  const encoded = media?.aes_key
+  let key = typeof override === 'string' && /^[\da-f]{32}$/iu.test(override) ? Buffer.from(override, 'hex') : undefined
+  if (!key && typeof encoded === 'string' && /^[\w+/]{22,44}={0,2}$/u.test(encoded)) {
+    const decoded = Buffer.from(encoded, 'base64')
+    key = decoded.length === 32 && /^[\da-f]{32}$/iu.test(decoded.toString('ascii'))
+      ? Buffer.from(decoded.toString('ascii'), 'hex') : decoded
+  }
+  if (key?.length === 16) {
+    const secret = key
+    return {url, reference, decrypt(bytes: Buffer) {
+      const context = createDecipheriv('aes-128-ecb', secret, null)
+      return Buffer.concat([context.update(bytes), context.final()])
+    }}
+  }
+  if (item.type === 2 && !override && !encoded) { return {url, reference} }
 }
 
 function trustedOrigin(candidate: string): string {
@@ -137,8 +183,13 @@ export async function startWechat(options: WechatConfig, runtime: ChannelRuntime
     }, account.token)
     return res.message_id ?? clientId
   }
+  const media = new ExpiringMedia(runtime.signal, request)
   const transport: ImTransport = {
     id: channel, permits, send, maxTextBytes: 3800,
+    async readAttachment(target, messageId, reference) {
+      if (!permits(target)) { throw new Error('微信媒体没有读取权限') }
+      return media.read(target, messageId, reference)
+    },
     // iLink publishes text updates as new messages. Only platforms with an edit API update in place.
     edit: (target, _id, reply) => send(target, reply),
   }
@@ -153,14 +204,21 @@ export async function startWechat(options: WechatConfig, runtime: ChannelRuntime
       for (const msg of updates.msgs ?? []) {
         if (msg.message_type !== 1 || msg.group_id || !msg.from_user_id || !msg.context_token ||
             !msg.message_id || (msg.to_user_id && msg.to_user_id !== account.botId)) continue
-        const text = msg.item_list?.filter(item => item.type === 1).map(item => item.text_item?.text ?? '').join('\n')
-        if (!text?.trim()) continue
+        const items = Array.isArray(msg.item_list) ? msg.item_list : []
+        const text = items.filter(item => item?.type === 1).map(item => item.text_item?.text ?? '').join('\n')
+        const candidates = items.filter(item => [2, 3, 4, 5].includes(item?.type)).slice(0, maxMediaCount + 1)
+        if (!text.trim() && !candidates.length) { continue }
         const target = { chat: msg.from_user_id, user: msg.from_user_id }
         if (!runtime.approvals && !permits(target) && !/^\/pair [0-9a-f]{20}$/i.test(text.trim())) {
           continue
         }
         runtime.state.set(contextKey(target.user), msg.context_token)
-        await gateway.receive({ ...target, id: String(msg.message_id), text })
+        const id = String(msg.message_id)
+        const resources = mediaFields(candidates.map(item => {
+          const resource = item.type === 3 ? undefined : mediaItem(item)
+          return resource && media.remember(target, id, resource.reference, resource.url, resource.decrypt)
+        }))
+        await gateway.receive({ ...target, id, text, ...resources })
       }
       if (typeof updates.get_updates_buf === 'string') runtime.state.set(cursorKey, updates.get_updates_buf)
       if (updates.longpolling_timeout_ms) timeout = Math.max(5000, Math.min(120_000, updates.longpolling_timeout_ms + 5000))

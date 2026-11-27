@@ -24,7 +24,9 @@
     "noTrace": "Ainda não há registros da sessão.",
     "inspect": "Ver sessão de leitura",
     "paired": "Esta conversa privada está vinculada.",
-    "language": "Idioma da conversa"
+    "language": "Idioma da conversa",
+    "mediaOnly": "Analise as mídias anexadas.",
+    "mediaUnavailable": "Não foi possível ler algumas mídias. Abra o Prism na Web e envie-as por lá."
   },
   "cli": {
     "login": "Autorize o canal lendo o código QR oficial.",

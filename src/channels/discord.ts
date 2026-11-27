@@ -2,6 +2,7 @@ import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, Client, DefaultRestOptions, DiscordAPIError, Events,
   GatewayIntentBits, Partials, RESTJSONErrorCodes, type MessageCreateOptions,
 } from 'discord.js'
+import { attachment, mediaFields, mediaResponse, platformMediaUrl } from '../media.js'
 import { channelSecret, type ChannelRuntime } from '../runtime.js'
 import type { Destination, Incoming, Reply } from '../transport.js'
 
@@ -11,16 +12,22 @@ export interface DiscordConfig {
 }
 
 const inspectPrefix = 'prism:inspect:'
+const attachmentHosts = new Set(['cdn.discordapp.com', 'media.discordapp.net'])
 
 export function discordMessage(message: {
   channel: { type: ChannelType; recipientId?: string | null }
   channelId: string; author: { id: string; bot: boolean; username?: string; globalName?: string | null }
   id: string; content: string; webhookId: string | null
+  attachments?: {values(): Iterable<{id: string; name: string; size: number; contentType?: string | null}>}
 }): Incoming | undefined {
   if (message.channel.type !== ChannelType.DM || message.author.bot || message.webhookId ||
-      message.channel.recipientId !== message.author.id || !message.content.trim()) return
+      message.channel.recipientId !== message.author.id) { return }
+  const resources = mediaFields(Array.from(message.attachments?.values() ?? [], item =>
+    attachment(item.id, {name: item.name, size: item.size, mimeType: item.contentType})))
+  if (!message.content.trim() && !resources.attachments && !resources.mediaUnavailable) { return }
   const username = message.author.globalName || message.author.username
-  return { chat: message.channelId, user: message.author.id, text: message.content, id: message.id, ...(username && {username}) }
+  return { chat: message.channelId, user: message.author.id, text: message.content, id: message.id,
+    ...resources, ...(username && {username}) }
 }
 
 export function discordPayload(reply: Reply) {
@@ -68,6 +75,24 @@ export async function startDiscord(config: DiscordConfig, runtime: ChannelRuntim
     const gateway = runtime.mount({
       id, maxTextLength: 2000, permits,
       send,
+      async readAttachment(target, messageId, reference) {
+        if (!permits(target) || !/^\d{1,24}$/u.test(messageId) || !/^\d{1,24}$/u.test(reference.resource)) {
+          throw new Error('Discord 附件标识无效')
+        }
+        const channel = await privateChannel(target)
+        const message = await channel.messages.fetch({message: messageId, cache: false, force: true})
+        const file = message.attachments.get(reference.resource)
+        const url = platformMediaUrl(file?.url, attachmentHosts)
+        const trusted = file && attachment(file.id, {name: file.name, size: file.size, mimeType: file.contentType})
+        if (message.author.id !== target.user || message.author.bot || message.webhookId || !trusted ||
+          !url?.pathname.startsWith('/attachments/' + target.chat + '/' + reference.resource + '/')) {
+          throw new Error('Discord 附件不属于当前私聊消息')
+        }
+        const response = await fetch(url, {
+          redirect: 'error', signal: AbortSignal.any([runtime.signal, AbortSignal.timeout(15000)]),
+        })
+        return mediaResponse(response, trusted)
+      },
       async edit(target, messageId, reply) {
         const channel = await privateChannel(target)
         try {

@@ -1,7 +1,8 @@
 import * as Lark from '@larksuiteoapi/node-sdk'
+import { attachment, binaryMedia, maxMediaBytes, maxMediaCount, mediaFields, readMedia } from './media.js'
 import { channelSecret, type ChannelRuntime } from './runtime.js'
 import type { GatewayState } from './state.js'
-import type { Destination, ImTransport, Incoming, Reply } from './transport.js'
+import type { AttachmentReference, Destination, ImTransport, Incoming, Reply } from './transport.js'
 
 export interface FeishuConfig {
   domain?: 'feishu' | 'lark'
@@ -88,10 +89,35 @@ export function decodeFeishu(event: ChatEvent, appId: string): Incoming | undefi
   const user = event.sender?.sender_id?.open_id
   const message = event.message
   if ((event.app_id && event.app_id !== appId) || event.sender?.sender_type !== 'user' || !user ||
-    message?.chat_type !== 'p2p' || message.message_type !== 'text' || !message.message_id || !message.content) return
-  let text: unknown
-  try { text = JSON.parse(message.content)?.text } catch { return }
-  if (typeof text === 'string' && text.trim()) return { user, chat: user, id: message.message_id, text }
+    message?.chat_type !== 'p2p' || !message.message_id || !message.content) return
+  let content: {text?: unknown; image_key?: unknown; file_key?: unknown; file_name?: unknown;
+    title?: unknown; content?: unknown} | null
+  try { content = JSON.parse(message.content) } catch { return }
+  const {message_type: kind} = message
+  const text = typeof content?.text === 'string' ? content.text : ''
+  if (kind === 'text' && text.trim()) { return { user, chat: user, id: message.message_id, text } }
+  if (kind === 'image' || kind === 'file' || kind === 'media') {
+    const reference = kind === 'image'
+      ? attachment(content?.image_key, {kind: 'image'})
+      : attachment(content?.file_key, {kind: 'file', name: content?.file_name})
+    return {user, chat: user, id: message.message_id, text, ...mediaFields([reference])}
+  }
+  if ((kind === 'audio' || kind === 'sticker') && content && (content.file_key || content.image_key)) {
+    return {user, chat: user, id: message.message_id, text, mediaUnavailable: true}
+  }
+  if (kind === 'post' && Array.isArray(content?.content)) {
+    const rows = content.content.filter(Array.isArray).flat()
+    const title = typeof content.title === 'string' ? content.title.trim() : ''
+    const plain = rows.filter(item => item?.tag === 'text' && typeof item.text === 'string').map(item => item.text)
+    const caption = [title, plain.join('')].filter(Boolean).join('\n')
+    const resources = mediaFields(rows.filter(item => item?.tag === 'img' || item?.tag === 'media')
+      .slice(0, maxMediaCount + 1).map(item => item.tag === 'img'
+        ? attachment(item.image_key, {kind: 'image'})
+        : attachment(item.file_key, {kind: 'file'})))
+    if (caption.trim() || resources.attachments || resources.mediaUnavailable) {
+      return {user, chat: user, id: message.message_id, text: caption, ...resources}
+    }
+  }
 }
 
 function content(reply: Reply) {
@@ -109,9 +135,50 @@ function content(reply: Reply) {
 }
 
 export class FeishuTransport implements ImTransport {
-  constructor(readonly id: string, private readonly client: Lark.Client, private readonly access: (d: Destination) => boolean) {}
+  constructor(
+    readonly id: string, private readonly client: Lark.Client, private readonly access: (d: Destination) => boolean,
+    private readonly signal?: AbortSignal,
+  ) {}
 
   permits(target: Destination): boolean { return target.chat === target.user && this.access(target) }
+
+  async readAttachment(target: Destination, messageId: string, reference: AttachmentReference) {
+    if (!this.permits(target) || !/^[\w-]{1,512}$/u.test(messageId) || !/^[\w-]{1,512}$/u.test(reference.resource)) {
+      throw new Error('飞书消息资源标识无效')
+    }
+    const timeout = AbortSignal.timeout(15000)
+    const signal = this.signal ? AbortSignal.any([this.signal, timeout]) : timeout
+    signal.throwIfAborted()
+    const download = this.client.im.messageResource.get({
+      path: {message_id: messageId, file_key: reference.resource},
+      params: {type: reference.kind === 'image' ? 'image' : 'file'},
+    }).then(resource => {
+      if (signal.aborted) {
+        resource.getReadableStream().destroy()
+        signal.throwIfAborted()
+      }
+      return resource
+    })
+    const cancelled = Promise.withResolvers<never>()
+    const cancel = () => cancelled.reject(new Error('飞书媒体读取超时'))
+    if (signal.aborted) { cancel() }
+    else { signal.addEventListener('abort', cancel, {once: true}) }
+    const resource = await Promise.race([download, cancelled.promise])
+      .finally(() => signal.removeEventListener('abort', cancel))
+    const stream = resource.getReadableStream()
+    if (Number(resource.headers?.['content-length']) > maxMediaBytes || signal.aborted) {
+      stream.destroy()
+      throw new Error('飞书消息资源不可读取')
+    }
+    const abort = () => stream.destroy(new Error('飞书媒体读取超时'))
+    signal.addEventListener('abort', abort, {once: true})
+    try {
+      return binaryMedia(await readMedia(stream), reference, resource.headers?.['content-type'])
+    } finally {
+      signal.removeEventListener('abort', abort)
+      stream.destroy()
+    }
+  }
 
   async send(target: Destination, reply: Reply): Promise<string> {
     if (!this.permits(target)) throw new Error('Unauthorized Feishu recipient')
@@ -148,7 +215,7 @@ export async function startFeishu(config: FeishuConfig, runtime: ChannelRuntime)
   const options = { appId: auth.appId, appSecret: auth.appSecret, domain: auth.domain === 'lark' ? Lark.Domain.Lark : Lark.Domain.Feishu,
     logger, loggerLevel: Lark.LoggerLevel.fatal }
   const client = new Lark.Client(options)
-  const gateway = runtime.mount(new FeishuTransport(id, client, runtime.access(id, users)), 'starting')
+  const gateway = runtime.mount(new FeishuTransport(id, client, runtime.access(id, users), runtime.signal), 'starting')
   const readUsername = async (user: string) => {
     try {
       const result = await client.contact.user.get({path: {user_id: user}, params: {user_id_type: 'open_id'}})

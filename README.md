@@ -16,6 +16,8 @@ Open **Plugins → Add plugin** and install and enable the five `@dsh-prism` pac
 
 Open **Settings → Prism/IM → Add IM** and choose Telegram, WeChat, Feishu / Lark, WeCom, QQ Bot, OneBot or Discord. For Feishu, use **QR binding** to select or create a bot on the authorization page, or use **Manual binding** to enter an existing app’s credentials. Once the channel is enabled, users can message the bot directly. The first message creates a request under **Pending approvals**, and Prism processes the message after you choose **Approve**. [Messaging channel walkthrough](https://prism.dsh-plug.in/guide/im)
 
+Authorized private chats can accept downloadable JPEG, PNG, WebP, GIF, MP4, WebM, and MOV files. Each message can include up to eight files of 16 MiB each. Feishu apps need permission to read message resources. WeChat and WeCom encrypted downloads expire, and OneBot accepts media from recognized Tencent CDN hosts. If a file cannot be read, Prism asks you to upload it in the web app and still processes any accompanying text.
+
 ## Run the standalone host from source
 
 Use Node.js 24.9 or later, npm, Git and credentials with read access to the five private plugin repositories. The checkout script places matching plugins and launcher files in a local `runtime/` directory. Run subsequent installation, configuration and launch commands there. The public guide is available without signing in. To use the example models, configure your DeepSeek credentials in DSH or set the `DEEPSEEK_API_KEY` environment variable. [Installation guide](https://prism.dsh-plug.in/)

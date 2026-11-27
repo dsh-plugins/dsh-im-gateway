@@ -24,7 +24,9 @@
     "noTrace": "Noch keine Einträge.",
     "inspect": "Sitzung ansehen",
     "paired": "Dieser private Chat ist gekoppelt.",
-    "language": "Sprache der Unterhaltung"
+    "language": "Sprache der Unterhaltung",
+    "mediaOnly": "Prüfe die angehängten Medien.",
+    "mediaUnavailable": "Einige Medien konnten nicht gelesen werden. Öffne Prism im Web und lade sie dort hoch."
   },
   "cli": {
     "login": "Mit dem offiziellen QR-Code des Dienstes autorisieren.",

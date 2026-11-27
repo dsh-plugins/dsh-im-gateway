@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
 import type { ConversationView, TraceEntry } from '@dsh-prism/dsh-orchestrator'
 import { localeOf, locales, messages, type Locale } from './i18n.js'
+import { maxMediaCount } from './media.js'
 import { GatewayState, principal } from './state.js'
-import { splitText, type Destination, type Incoming, type ImTransport, type Reply } from './transport.js'
+import { splitText, type BinaryMedia, type Destination, type Incoming, type ImTransport, type Reply } from './transport.js'
 
 function modelLabel(model: ConversationView['models'][number]): string {
   return 'label' in model && typeof model.label === 'string' ? model.label : model.id
@@ -10,7 +11,8 @@ function modelLabel(model: ConversationView['models'][number]): string {
 
 export interface ConversationService {
   view(owner: string): Promise<ConversationView>
-  message(owner: string, text: string, requestId: string, source?: {channel: string; sender?: string}): Promise<ConversationView>
+  message(owner: string, text: string, requestId: string, source?: {channel: string; sender?: string}, attachmentIds?: string[]): Promise<ConversationView>
+  stageMedia?(owner: string, input: BinaryMedia): Promise<{assetId: string; mimeType: string; name?: string}>
   selectModel(owner: string, model: string): Promise<ConversationView>
   trace(owner: string, taskId: string): Promise<TraceEntry[]>
   subscribe(owner: string, changed: (snapshot: ConversationView) => void): () => void
@@ -125,7 +127,7 @@ export class ImGateway {
   }
 
   async receive(input: Incoming, readUsername?: (user: string) => Promise<string | undefined>): Promise<void> {
-    if (this.closed || !input.text.trim()) return
+    if (this.closed || (!input.text.trim() && !input.attachments?.length && !input.mediaUnavailable)) { return }
     if (!this.transport.permits(input)) {
       const code = /^\/pair\s+([a-f0-9]{20})$/i.exec(input.text.trim())?.[1]
       if (!code || !this.state.claim(this.transport.id, input, code) || !this.transport.permits(input)) {
@@ -143,7 +145,9 @@ export class ImGateway {
       }
     }
     // A pushed frame may be the platform's only delivery. Persist it before the first await.
-    const saved = /^\/pair(?:\s|$)/i.test(input.text) ? { ...input, text: '/pair' } : input
+    const saved = /^\/pair(?:\s|$)/i.test(input.text)
+      ? { ...input, text: '/pair', attachments: undefined, mediaUnavailable: undefined }
+      : input
     this.state.enqueue(this.transport.id, saved)
     await this.drain(input)
   }
@@ -159,7 +163,10 @@ export class ImGateway {
     const previous = this.inbound.get(owner)
     const next = (previous ?? Promise.resolve()).catch(() => {}).then(async () => {
       if (!this.transport.permits(target)) return
-      for (const item of this.state.pendingInputs(owner)) await this.process(owner, item)
+      for (const item of this.state.pendingInputs(owner)) {
+        if (!this.transport.permits(item)) { return }
+        await this.process(owner, item)
+      }
     })
     this.inbound.set(owner, next)
     try {
@@ -177,23 +184,68 @@ export class ImGateway {
     }
   }
 
+  private async prepareMedia(owner: string, input: Incoming): Promise<NonNullable<Incoming['preparedMedia']>> {
+    if (input.preparedMedia) { return input.preparedMedia }
+    const attachments = input.attachments ?? []
+    const ids: string[] = []
+    let unavailable = !!input.mediaUnavailable || attachments.length > maxMediaCount
+    for (const attachment of attachments.slice(0, maxMediaCount)) {
+      if (!this.transport.permits(input)) { throw new Error('IM 私聊授权已变更') }
+      if (!this.core.stageMedia || !this.transport.readAttachment) {
+        unavailable = true
+        break
+      }
+      try {
+        const media = await this.transport.readAttachment(input, input.id, attachment)
+        if (!this.transport.permits(input)) { break }
+        const registered = await this.core.stageMedia(owner, media)
+        if (!registered.assetId) { throw new Error('棱镜暂存未返回媒体 ID') }
+        ids.push(registered.assetId)
+      } catch {
+        unavailable = true
+      }
+    }
+    if (!this.transport.permits(input)) { throw new Error('IM 私聊授权已变更') }
+    const result = {ids, unavailable}
+    this.state.prepareInput(owner, {...input, attachments: undefined, preparedMedia: result})
+    return result
+  }
+
   private async process(owner: string, input: Incoming) {
     const target = { chat: input.chat, user: input.user }
     const detected = localeOf(input.locale)
     if (detected) this.state.set('detected/' + owner, detected)
     this.watch(target)
+    if (input.attachments?.length || input.mediaUnavailable || input.preparedMedia) {
+      const media = await this.prepareMedia(owner, input)
+      const copy = messages(this.language(owner))
+      if (media.unavailable) { await this.sendText(target, 'media/' + input.id, copy.mediaUnavailable) }
+      if (input.text.trim() || media.ids.length) {
+        if (!this.transport.permits(input)) { throw new Error('IM 私聊授权已变更') }
+        await this.sendToCore(owner, input, input.text.trim() ? input.text : copy.mediaOnly, media.ids)
+      }
+      this.state.finishInput(owner, input.id)
+      this.wake(target)
+      return
+    }
     const match = /^\/(\w+)(?:@\w+)?(?:\s+([\s\S]*))?$/.exec(input.text.trim())
     if (match) {
       const reply = await this.command(owner, match[1]!, match[2]?.trim() ?? '')
       await this.sendText(target, 'cmd/' + input.id, reply)
     } else {
-      await this.core.message(owner, input.text, input.id, {
-        channel: this.options.channel ?? this.transport.id.split(/[:/]/, 1)[0],
-        ...(input.username && {sender: input.username.slice(0, 120)}),
-      })
+      await this.sendToCore(owner, input, input.text)
     }
     this.state.finishInput(owner, input.id)
     this.wake(target)
+  }
+
+  private async sendToCore(owner: string, input: Incoming, text: string, ids?: string[]): Promise<void> {
+    const source = {
+      channel: this.options.channel ?? this.transport.id.split(/[:/]/, 1)[0],
+      ...(input.username && {sender: input.username.slice(0, 120)}),
+    }
+    if (ids?.length) { await this.core.message(owner, text, input.id, source, ids) }
+    else { await this.core.message(owner, text, input.id, source) }
   }
 
   private async command(owner: string, name: string, arg: string): Promise<string> {

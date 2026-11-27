@@ -83,6 +83,11 @@ export class GatewayState {
       .map(row => JSON.parse(String(row.payload)) as Incoming)
   }
 
+  prepareInput(owner: string, input: Incoming): void {
+    this.db.prepare('UPDATE inbox SET payload=? WHERE owner=? AND event=?')
+      .run(JSON.stringify(input), owner, input.id)
+  }
+
   finishInput(owner: string, event: string) {
     this.db.exec('BEGIN IMMEDIATE')
     try {
@@ -137,10 +142,11 @@ export class GatewayState {
   requestApproval(channel: string, input: Incoming) {
     const owner = principal(channel, input)
     const request = randomUUID()
-    const { chat, user, text, id, locale } = input
+    const { chat, user, text, id, locale, attachments, mediaUnavailable } = input
     const result = this.db.prepare(`INSERT OR IGNORE INTO approvals(id, owner, channel, chat, user, username, payload)
       SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM authorized_chats WHERE owner=?)`)
-      .run(request, owner, channel, chat, user, approvalUsername(input.username), JSON.stringify({chat, user, text, id, locale}), owner)
+      .run(request, owner, channel, chat, user, approvalUsername(input.username),
+        JSON.stringify({chat, user, text, id, locale, attachments, mediaUnavailable}), owner)
     return Number(result.changes) === 1 ? request : undefined
   }
 

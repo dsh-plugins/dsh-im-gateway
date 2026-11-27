@@ -25,7 +25,9 @@
     "noTrace": "No session entries yet.",
     "inspect": "View read-only session",
     "paired": "This private chat is paired.",
-    "language": "Conversation language"
+    "language": "Conversation language",
+    "mediaOnly": "Review the attached media.",
+    "mediaUnavailable": "Some media could not be read. Open Prism on the web and upload it there."
   },
   "cli": {
     "login": "Authorize the channel by scanning its official QR code.",

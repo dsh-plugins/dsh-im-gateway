@@ -1,4 +1,5 @@
 import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto'
+import { attachment, maxMediaCount, mediaFields, mediaResponse, platformMediaUrl, qqMediaHosts } from '../media.js'
 import { requiredSecret, type ChannelRuntime } from '../runtime.js'
 import type { Destination, Reply } from '../transport.js'
 import { CallbackError, messageText, signedEvents } from './signed-events.js'
@@ -96,7 +97,14 @@ export function startQQ(options: QQConfig, runtime: ChannelRuntime): void {
     return result.id
   }
 
-  const gateway = runtime.mount({id,permits,maxTextBytes:3500,send,edit:(target,_prev,reply)=>send(target,reply)})
+  const gateway = runtime.mount({
+    id, permits, maxTextBytes: 3500, send, edit: (target, _prev, reply) => send(target,reply),
+    async readAttachment(target, _messageId, reference) {
+      const url = platformMediaUrl(reference.resource, qqMediaHosts)
+      if (!permits(target) || !url) { throw new Error('QQ 附件不可读取') }
+      return mediaResponse(await fetch(url, {redirect: 'error', signal: signal()}), reference)
+    },
+  })
   runtime.webhook('/prism/im/qq',signedEvents((headers,raw) => {
     const ts = headers['x-signature-timestamp'], signature = headers['x-signature-ed25519']
     // The open platform's URL-registration example sends only X-Bot-Appid.
@@ -122,14 +130,20 @@ export function startQQ(options: QQConfig, runtime: ChannelRuntime): void {
       if (event.t === 'C2C_MESSAGE_CREATE') {
         const author = data.author as Record<string, unknown> | undefined
         const user = author?.user_openid ?? author?.id
-        if (openId(user) && !author?.bot && typeof data.id === 'string' && data.id && typeof data.content === 'string' && data.content.trim()) {
+        const text = typeof data.content === 'string' ? data.content : ''
+        const raw = Array.isArray(data.attachments) ? data.attachments.slice(0, maxMediaCount + 1) : []
+        const resources = mediaFields(raw.map(item => attachment(platformMediaUrl(item?.url, qqMediaHosts)?.href, {
+          name: item?.filename, mimeType: item?.content_type, size: item?.size,
+        })))
+        if (openId(user) && !author?.bot && typeof data.id === 'string' && data.id &&
+          (text.trim() || resources.attachments || resources.mediaUnavailable)) {
           const target = {user,chat:user}
-          if (runtime.approvals || permits(target) || /^\/pair\s+[a-f\d]{20}$/i.test(data.content.trim())) {
+          if (runtime.approvals || permits(target) || /^\/pair\s+[a-f\d]{20}$/i.test(text.trim())) {
             const timestamp = typeof data.timestamp === 'string' ? Date.parse(data.timestamp) : NaN
             if (Number.isFinite(timestamp)) remember(user, data.id, Math.min(timestamp,Date.now()))
           }
           const username = author?.username ?? author?.nickname
-          await gateway.receive({...target,id:data.id,text:data.content,...(typeof username === 'string' && {username})})
+          await gateway.receive({...target, id: data.id, text, ...resources, ...(typeof username === 'string' && {username})})
         }
       } else if (openId(data.openid)) {
         if (event.t === 'C2C_MSG_REJECT' || event.t === 'FRIEND_DEL') runtime.state.set(key('blocked',data.openid),'yes')

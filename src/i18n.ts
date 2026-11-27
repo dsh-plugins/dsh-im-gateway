@@ -11,6 +11,7 @@ interface Messages {
   user: string; assistant: string; tool: string; system: string; noModel: string; currentModel: string;
   selected: string; modelHint: string; noTasks: string; missingTask: string; trace: string;
   noTrace: string; inspect: string; paired: string; language: string
+  mediaOnly: string; mediaUnavailable: string
 }
 const catalogs = new Map<Locale, Messages>()
 export function messages(locale: Locale): Messages {

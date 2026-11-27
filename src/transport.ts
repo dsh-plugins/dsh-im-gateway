@@ -9,6 +9,24 @@ export interface Incoming extends Destination {
   locale?: string
   username?: string
   text: string
+  attachments?: AttachmentReference[]
+  mediaUnavailable?: true
+  preparedMedia?: {ids: string[]; unavailable: boolean}
+}
+
+/** 平台可重新解析的附件标识。收件队列只持久化标识和元数据。 */
+export interface AttachmentReference {
+  resource: string
+  kind?: 'image' | 'file'
+  name?: string
+  mimeType?: string
+}
+
+/** 仅在经授权的资源读取与棱镜暂存之间传递媒体字节。 */
+export interface BinaryMedia {
+  bytes: Uint8Array
+  mimeType: string
+  name?: string
 }
 
 export interface Reply {
@@ -24,6 +42,7 @@ export interface ImTransport {
   maxTextLength?: number
   maxTextBytes?: number
   permits(destination: Destination): boolean
+  readAttachment?(destination: Destination, messageId: string, attachment: AttachmentReference): Promise<BinaryMedia>
   send(destination: Destination, reply: Reply): Promise<string>
   edit(destination: Destination, messageId: string, reply: Reply): Promise<string>
 }

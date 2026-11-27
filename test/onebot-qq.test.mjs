@@ -8,6 +8,7 @@ import { startQQ } from '../dist/channels/qq.js'
 import { GatewayState } from '../dist/state.js'
 
 const realFetch = globalThis.fetch
+const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 async function listener(t, handler) {
   const server = createServer(handler)
   server.listen(0, '127.0.0.1')
@@ -62,7 +63,7 @@ test('OneBot v11 verifies reverse HTTP events, isolates friend DMs and sends tex
   assert.equal((await post({message_type:'group'})).status,200)
   assert.equal((await post({sender:{user_id:789}})).status,200)
   assert.equal((await post()).status,200)
-  assert.deepEqual(fixture.accepted,[{chat:'456',user:'456',id:'18',text:'hello!'}])
+  assert.deepEqual(fixture.accepted,[{chat:'456',user:'456',id:'18',text:'hello!',mediaUnavailable:true}])
   await post({user_id:789,message:'/pair 123'})
   assert.equal(fixture.pairCandidate().user,'789')
   const to={chat:'456',user:'456'}, reply={text:'[CQ:at,qq=all]',inspectTask:'task'}
@@ -71,6 +72,18 @@ test('OneBot v11 verifies reverse HTTP events, isolates friend DMs and sends tex
   assert.deepEqual(calls.map(([name])=>name),['/get_login_info','/send_private_msg','/send_private_msg'])
   assert.deepEqual(calls[1][1],{user_id:456,message:[{type:'text',data:{text:'[CQ:at,qq=all]\n/inspect task'}}]})
   await assert.rejects(fixture.adapter.send({...to,chat:'789'},reply))
+  const url = 'https://multimedia.nt.qq.com.cn/download?file=fixture'
+  await post({message_id:19,message:[{type:'image',data:{url}}]})
+  const image = fixture.accepted.at(-1)
+  assert.equal(image.text,'')
+  t.after(() => { globalThis.fetch = realFetch })
+  globalThis.fetch = async (request,init) => {
+    assert.equal(String(request),url)
+    assert.equal(init.redirect,'error')
+    return new Response(png)
+  }
+  assert.deepEqual((await fixture.adapter.readAttachment(to,image.id,image.attachments[0])).bytes,png)
+  await assert.rejects(fixture.adapter.readAttachment(to,image.id,{resource:'https://example.invalid/image'}),/不可读取/)
 })
 
 test('official QQ signs validation challenges, checks dispatches and preserves passive sequence across delivery retries', async t => {
@@ -82,6 +95,10 @@ test('official QQ signs validation challenges, checks dispatches and preserves p
   ])})
   const sent=[],times=new Map()
   globalThis.fetch=async(url,options)=>{
+    if (new URL(url).hostname==='gchat.qpic.cn') {
+      assert.equal(options.redirect,'error')
+      return new Response(png)
+    }
     assert.equal(new URL(url).origin,'https://api.bot.qq.com')
     const request=JSON.parse(options.body)
     if (new URL(url).pathname==='/app/getAppAccessToken') {
@@ -132,4 +149,10 @@ test('official QQ signs validation challenges, checks dispatches and preserves p
   await post({op:0,t:'C2C_MSG_RECEIVE',d:{openid:'a123'}})
   await fixture.adapter.send(target,{text:'available'})
   await assert.rejects(fixture.adapter.send({chat:'someone-else',user:'a123'},reply))
+  const media={...event,d:{...event.d,id:'image-1',content:'',
+    attachments:[{url:'//gchat.qpic.cn/fixture',content_type:'image/png',filename:'image.png'}]}}
+  await post(media)
+  const image=fixture.accepted.at(-1)
+  assert.equal(image.text,'')
+  assert.deepEqual((await fixture.adapter.readAttachment(target,image.id,image.attachments[0])).bytes,png)
 })

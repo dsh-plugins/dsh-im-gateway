@@ -24,7 +24,9 @@
     "noTrace": "La session ne contient encore aucune entrée.",
     "inspect": "Afficher la session",
     "paired": "Cette conversation privée est associée.",
-    "language": "Langue de la conversation"
+    "language": "Langue de la conversation",
+    "mediaOnly": "Examine les médias joints.",
+    "mediaUnavailable": "Certains médias n’ont pas pu être lus. Ouvre Prism sur le Web et importe-les."
   },
   "cli": {
     "login": "Autorisez le canal en scannant son QR code officiel.",

@@ -1,15 +1,21 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import type { ImGateway } from './gateway.js'
+import { attachment, maxMediaBytes, mediaFields, mediaResponse } from './media.js'
 import type { GatewayState } from './state.js'
-import type { Destination, ImTransport, Incoming, Reply } from './transport.js'
+import type { AttachmentReference, Destination, ImTransport, Incoming, Reply } from './transport.js'
 
 import { channelSecret, type ChannelRuntime } from './runtime.js'
 export interface TelegramConfig { tokenEnv?: string; allowedUserIds?: string[] }
 interface User { id: number; is_bot: boolean; language_code?: string; username?: string; first_name?: string; last_name?: string }
 interface Chat { type: string; id: number }
+interface TelegramFile { file_id: string; file_name?: string; mime_type?: string; file_size?: number }
 interface Update {
   update_id: number
-  message?: { from?: User; chat: Chat; text?: string }
+  message?: {
+    from?: User; chat: Chat; text?: string; caption?: string; photo?: TelegramFile[]
+    video?: TelegramFile; animation?: TelegramFile; document?: TelegramFile; video_note?: TelegramFile
+    voice?: unknown; audio?: unknown; sticker?: unknown
+  }
   callback_query?: { id: string; from: User; message?: { chat: Chat }; data?: string }
 }
 
@@ -92,6 +98,22 @@ export class TelegramTransport implements ImTransport {
     return messageId
   }
 
+  async readAttachment(target: Destination, _messageId: string, reference: AttachmentReference) {
+    if (!this.permits(target) || !/^[\w-]{1,512}$/u.test(reference.resource)) {
+      throw new Error('Telegram 文件标识无效')
+    }
+    const file = await this.api<{file_path?: string; file_size?: number}>('getFile', {file_id: reference.resource})
+    const path = file.file_path?.split('/') ?? []
+    if (!path.length || path.some(part => !/^[\w.-]+$/u.test(part) || part === '.' || part === '..') ||
+      (file.file_size !== undefined && file.file_size > maxMediaBytes)) {
+      throw new Error('Telegram 文件不可下载')
+    }
+    const response = await this.request('https://api.telegram.org/file/bot' + this.token + '/' + path.join('/'), {
+      redirect: 'error', signal: AbortSignal.any([this.signal, AbortSignal.timeout(15000)]),
+    })
+    return mediaResponse(response, reference)
+  }
+
   decode(update: Update): Incoming | undefined {
     const callback = update.callback_query
     const chat = callback ? callback.message?.chat : update.message?.chat
@@ -99,13 +121,21 @@ export class TelegramTransport implements ImTransport {
     if (chat?.type !== 'private' || !user || user.is_bot || !Number.isSafeInteger(user.id) || !Number.isSafeInteger(chat.id)) return
     const target = { user: String(user.id), chat: String(chat.id) }
     if (chat.id !== user.id) return
-    const text = callback ? (callback.data?.startsWith('t:') ? '/inspect ' + callback.data.slice(2) : undefined) : update.message?.text
+    const msg = callback ? undefined : update.message
+    const text = callback ? (callback.data?.startsWith('t:') ? '/inspect ' + callback.data.slice(2) : undefined) : msg?.text ?? msg?.caption
     if (!this.permits(target) && (callback || (!this.approvals && !/^\/pair [a-f0-9]{20}$/i.test(text?.trim() ?? '')))) {
       return
     }
-    if (text?.trim()) {
+    const photo = msg?.photo?.at(-1)
+    const file = msg?.animation ?? msg?.video ?? msg?.video_note ?? msg?.document
+    const resources = mediaFields([
+      ...(photo ? [attachment(photo.file_id, {kind: 'image', size: photo.file_size})] : []),
+      ...(file ? [attachment(file.file_id, {name: file.file_name, mimeType: file.mime_type, size: file.file_size})] : []),
+      ...(msg?.voice || msg?.audio || msg?.sticker ? [undefined] : []),
+    ])
+    if (text?.trim() || resources.attachments || resources.mediaUnavailable) {
       const username = user.username || [user.first_name, user.last_name].filter(Boolean).join(' ')
-      return { ...target, id: String(update.update_id), text, ...(username && {username}),
+      return { ...target, id: String(update.update_id), text: text ?? '', ...resources, ...(username && {username}),
         ...(user.language_code && {locale: user.language_code}) }
     }
   }

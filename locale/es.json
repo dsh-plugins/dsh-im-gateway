@@ -24,7 +24,9 @@
     "noTrace": "La sesión aún no tiene entradas.",
     "inspect": "Ver sesión de solo lectura",
     "paired": "Este chat privado está vinculado.",
-    "language": "Idioma de la conversación"
+    "language": "Idioma de la conversación",
+    "mediaOnly": "Revisa los archivos multimedia adjuntos.",
+    "mediaUnavailable": "No se pudieron leer algunos archivos. Abre Prism en la web y súbelos allí."
   },
   "cli": {
     "login": "Autoriza el canal escaneando su código QR oficial.",
