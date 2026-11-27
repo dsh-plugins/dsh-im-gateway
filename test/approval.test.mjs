@@ -50,7 +50,7 @@ test('approval retains the first input, separates bot identities and releases it
     gateway = new ImGateway(core, state, transport(bot), undefined, 'zh', {approvals: true})
     gateway.start()
     await gateway.receive(first)
-    assert.deepEqual(received, [[owner, first.text, first.id]])
+    assert.deepEqual(received, [[owner, first.text, first.id, {channel: 'onebot'}]])
     assert.deepEqual(state.pendingInputs(owner), [])
   } finally {
     await gateway.close()

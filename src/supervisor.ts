@@ -133,7 +133,8 @@ export class ChannelSupervisor {
         signal.throwIfAborted()
         if (task.gateways.has(transport.id)) throw new Error('Duplicate IM transport')
         const gateway = new ImGateway(this.ctx.get('prism', true) as ConversationService, this.state, transport,
-          () => log.warn('IM delivery pending: ' + channel), localeOf(this.config.locale) ?? 'zh', {approvals: this.config.managed})
+          () => log.warn('IM delivery pending: ' + channel), localeOf(this.config.locale) ?? 'zh',
+          {approvals: this.config.managed, channel})
         task.gateways.set(transport.id, gateway)
         gateway.start()
         task.status = status

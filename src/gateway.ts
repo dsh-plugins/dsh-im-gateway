@@ -10,10 +10,11 @@ function modelLabel(model: ConversationView['models'][number]): string {
 
 export interface ConversationService {
   view(owner: string): Promise<ConversationView>
-  message(owner: string, text: string, requestId: string): Promise<ConversationView>
+  message(owner: string, text: string, requestId: string, source?: {channel: string; sender?: string}): Promise<ConversationView>
   selectModel(owner: string, model: string): Promise<ConversationView>
   trace(owner: string, taskId: string): Promise<TraceEntry[]>
   subscribe(owner: string, changed: (snapshot: ConversationView) => void): () => void
+  registerChannelAccess?(channelId: string, permits: (owner: string) => boolean): () => void
 }
 
 export class ImGateway {
@@ -24,6 +25,7 @@ export class ImGateway {
   private readonly retries = new Map<string, NodeJS.Timeout>()
   private readonly inputRetries = new Map<string, NodeJS.Timeout>()
   private closed = false
+  private unregisterAccess?: () => void
 
   constructor(
     private readonly core: ConversationService,
@@ -31,10 +33,22 @@ export class ImGateway {
     private readonly transport: ImTransport,
     private readonly onDeliveryError: () => void = () => {},
     private readonly defaultLocale: Locale = 'zh',
-    private readonly options: {approvals?: boolean} = {},
+    private readonly options: {approvals?: boolean; channel?: string} = {},
   ) {}
 
   start() {
+    this.unregisterAccess = this.core.registerChannelAccess?.(this.transport.id, owner => {
+      if (this.closed || !owner.startsWith('im:')) {
+        return false
+      }
+      try {
+        const [channel, chat, user] = JSON.parse(owner.slice(3)) as unknown[]
+        return channel === this.transport.id && typeof chat === 'string' && typeof user === 'string' &&
+          this.transport.permits({chat, user})
+      } catch {
+        return false
+      }
+    })
     for (const target of this.state.list(this.transport.id)) {
       if (!this.transport.permits(target)) continue
       this.watch(target)
@@ -72,6 +86,9 @@ export class ImGateway {
   }
 
   private async deliver(target: Destination, key: string, reply: Reply, version = '') {
+    if (this.closed || !this.transport.permits(target)) {
+      return
+    }
     const owner = principal(this.transport.id, target)
     const previous = this.state.receipt(owner, key)
     if (previous?.version === version) return
@@ -170,7 +187,10 @@ export class ImGateway {
       const reply = await this.command(owner, match[1]!, match[2]?.trim() ?? '')
       await this.sendText(target, 'cmd/' + input.id, reply)
     } else {
-      await this.core.message(owner, input.text, input.id)
+      await this.core.message(owner, input.text, input.id, {
+        channel: this.options.channel ?? this.transport.id.split(/[:/]/, 1)[0],
+        ...(input.username && {sender: input.username.slice(0, 120)}),
+      })
     }
     this.state.finishInput(owner, input.id)
     this.wake(target)
@@ -212,6 +232,7 @@ export class ImGateway {
 
   async close() {
     this.closed = true
+    this.unregisterAccess?.()
     for (const unwatch of this.watchers.values()) unwatch()
     for (const timers of [this.retries, this.inputRetries]) {
       for (const timer of timers.values()) clearTimeout(timer)

@@ -1,6 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { dshPath } from '@deepseek-ai/dsh-home-paths'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { GatewayState } from './state.js'
 import type { Locale } from './i18n.js'
 import { channels } from './admin-config.js'
@@ -40,7 +42,10 @@ export interface Config {
 
 export function apply(ctx: Context, config: Config = {}) {
   if (!config.managed && !channels.some(channel => config[channel])) return
-  const file = config.statePath ?? dshPath('data', 'prism', 'im.sqlite')
+  const profile = ctx.get('profileContext', true) as {name: string; dir: string} | undefined
+  const legacy = dshPath('data', 'prism', 'im.sqlite')
+  const file = config.statePath ?? (!profile || (profile.name === 'web' && existsSync(legacy))
+    ? legacy : join(profile.dir, 'data', 'dsh-prism', 'im.sqlite'))
   const state = new GatewayState(file)
   const runner = new ChannelSupervisor(ctx, config, state, file)
   let login: LoginAdmin | undefined
