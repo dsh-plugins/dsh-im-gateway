@@ -52,6 +52,7 @@ export function apply(ctx: Context, config: Config = {}) {
       login = new LoginAdmin(state, channel => runner.registered(channel))
       unmount = server.register(adminRoute({
         list: () => runner.list(), save: (channel, body) => runner.save(channel, body),
+        approvals: () => state.approvals(), decideApproval: (id, decision) => runner.decideApproval(id, decision),
         pair: channel => ({code: state.issuePairingCode(channel), expiresAt: Date.now() + 600_000}),
         login,
       }))

@@ -7,6 +7,7 @@ export interface Destination {
 export interface Incoming extends Destination {
   id: string
   locale?: string
+  username?: string
   text: string
 }
 

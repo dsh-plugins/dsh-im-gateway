@@ -5,7 +5,7 @@ import type { Destination, ImTransport, Incoming, Reply } from './transport.js'
 
 import { channelSecret, type ChannelRuntime } from './runtime.js'
 export interface TelegramConfig { tokenEnv?: string; allowedUserIds?: string[] }
-interface User { id: number; is_bot: boolean; language_code?: string }
+interface User { id: number; is_bot: boolean; language_code?: string; username?: string; first_name?: string; last_name?: string }
 interface Chat { type: string; id: number }
 interface Update {
   update_id: number
@@ -36,6 +36,7 @@ export class TelegramTransport implements ImTransport {
     private readonly signal: AbortSignal,
     private readonly request: typeof fetch = fetch,
     private readonly paired?: (target: Destination) => boolean,
+    private readonly approvals = false,
   ) {
     const bot = /^(\d+):[\w-]+$/.exec(token)?.[1]
     if (!bot) throw new Error('Invalid Telegram bot token format')
@@ -99,8 +100,14 @@ export class TelegramTransport implements ImTransport {
     const target = { user: String(user.id), chat: String(chat.id) }
     if (chat.id !== user.id) return
     const text = callback ? (callback.data?.startsWith('t:') ? '/inspect ' + callback.data.slice(2) : undefined) : update.message?.text
-    if (!this.permits(target) && !(!callback && /^\/pair [a-f0-9]{20}$/i.test(text?.trim() ?? ''))) return
-    if (text?.trim()) return { ...target, id: String(update.update_id), text, ...(user.language_code && { locale: user.language_code }) }
+    if (!this.permits(target) && (callback || (!this.approvals && !/^\/pair [a-f0-9]{20}$/i.test(text?.trim() ?? '')))) {
+      return
+    }
+    if (text?.trim()) {
+      const username = user.username || [user.first_name, user.last_name].filter(Boolean).join(' ')
+      return { ...target, id: String(update.update_id), text, ...(username && {username}),
+        ...(user.language_code && {locale: user.language_code}) }
+    }
   }
 
   /** Telegram acknowledges updates on the next poll with a higher offset. */
@@ -136,6 +143,6 @@ export function startTelegram(options: TelegramConfig, runtime: ChannelRuntime):
   const token = channelSecret(runtime, 'token', options.tokenEnv ?? 'TELEGRAM_BOT_TOKEN', () => runtime.state.get('telegram/token'))
   if (!token) throw new Error('Missing Telegram bot token')
   const channel = 'telegram/' + token.split(':')[0]
-  const transport = new TelegramTransport(token, options.allowedUserIds ?? [], runtime.signal, fetch, runtime.access(channel))
+  const transport = new TelegramTransport(token, options.allowedUserIds ?? [], runtime.signal, fetch, runtime.access(channel), runtime.approvals)
   return transport.poll(runtime.mount(transport), runtime.state, () => runtime.warn('Telegram polling paused; retrying'))
 }

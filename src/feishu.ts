@@ -119,11 +119,24 @@ export async function startFeishu(config: FeishuConfig, runtime: ChannelRuntime)
   const logger = { trace() {}, debug() {}, info() {}, warn() {}, error() {} }
   const options = { appId: auth.appId, appSecret: auth.appSecret, domain: auth.domain === 'lark' ? Lark.Domain.Lark : Lark.Domain.Feishu,
     logger, loggerLevel: Lark.LoggerLevel.fatal }
-  const gateway = runtime.mount(new FeishuTransport(id, new Lark.Client(options), runtime.access(id, users)))
+  const client = new Lark.Client(options)
+  const gateway = runtime.mount(new FeishuTransport(id, client, runtime.access(id, users)))
+  const readUsername = async (user: string) => {
+    try {
+      const result = await client.contact.user.get({path: {user_id: user}, params: {user_id_type: 'open_id'}})
+      return result.code === 0 ? result.data?.user?.name : undefined
+    } catch {
+      if (!runtime.signal.aborted) {
+        runtime.warn('Could not retrieve the Feishu user name for an IM approval')
+      }
+    }
+  }
   const dispatcher = new Lark.EventDispatcher({ logger, loggerLevel: Lark.LoggerLevel.fatal }).register({
     'im.message.receive_v1': async event => {
       const input = decodeFeishu(event, auth.appId)
-      if (input && !runtime.signal.aborted) await gateway.receive(input)
+      if (input && !runtime.signal.aborted) {
+        await gateway.receive(input, readUsername)
+      }
     },
   })
   const ws = new Lark.WSClient({ ...options, onError: () => runtime.warn('Feishu WebSocket failed') })

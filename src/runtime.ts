@@ -7,6 +7,7 @@ export interface ChannelRuntime {
   readonly signal: AbortSignal
   readonly state: GatewayState
   readonly directory: string
+  readonly approvals?: boolean
   readSecret?(field: string): string | undefined
   mount(transport: ImTransport): ImGateway
   access(channel: string, allowedUsers?: readonly string[]): (target: Destination) => boolean

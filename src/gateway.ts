@@ -27,6 +27,7 @@ export class ImGateway {
     private readonly transport: ImTransport,
     private readonly onDeliveryError: () => void = () => {},
     private readonly defaultLocale: Locale = 'zh',
+    private readonly options: {approvals?: boolean} = {},
   ) {}
 
   start() {
@@ -102,16 +103,34 @@ export class ImGateway {
     }
   }
 
-  async receive(input: Incoming): Promise<void> {
+  async receive(input: Incoming, readUsername?: (user: string) => Promise<string | undefined>): Promise<void> {
     if (this.closed || !input.text.trim()) return
     if (!this.transport.permits(input)) {
       const code = /^\/pair\s+([a-f0-9]{20})$/i.exec(input.text.trim())?.[1]
-      if (!code || !this.state.claim(this.transport.id, input, code) || !this.transport.permits(input)) return
+      if (!code || !this.state.claim(this.transport.id, input, code) || !this.transport.permits(input)) {
+        if (this.options.approvals && !/^\/pair(?:\s|$)/i.test(input.text.trim()) && input.text.length <= 32_000) {
+          const id = this.state.requestApproval(this.transport.id, input)
+          if (id && !input.username && readUsername) {
+            void readUsername(input.user).then(username => {
+              if (!this.closed && username) {
+                this.state.nameApproval(id, username)
+              }
+            }).catch(this.onDeliveryError)
+          }
+        }
+        return
+      }
     }
     // A pushed frame may be the platform's only delivery. Persist it before the first await.
     const saved = /^\/pair(?:\s|$)/i.test(input.text) ? { ...input, text: '/pair' } : input
     this.state.enqueue(this.transport.id, saved)
     await this.drain(input)
+  }
+
+  resume(target: Destination) {
+    if (!this.closed) {
+      void this.drain(target).catch(this.onDeliveryError)
+    }
   }
 
   private async drain(target: Destination) {

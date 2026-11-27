@@ -124,11 +124,12 @@ export function startQQ(options: QQConfig, runtime: ChannelRuntime): void {
         const user = author?.user_openid ?? author?.id
         if (openId(user) && !author?.bot && typeof data.id === 'string' && data.id && typeof data.content === 'string' && data.content.trim()) {
           const target = {user,chat:user}
-          if (permits(target) || /^\/pair\s+[a-f\d]{20}$/i.test(data.content.trim())) {
+          if (runtime.approvals || permits(target) || /^\/pair\s+[a-f\d]{20}$/i.test(data.content.trim())) {
             const timestamp = typeof data.timestamp === 'string' ? Date.parse(data.timestamp) : NaN
             if (Number.isFinite(timestamp)) remember(user, data.id, Math.min(timestamp,Date.now()))
           }
-          await gateway.receive({...target,id:data.id,text:data.content})
+          const username = author?.username ?? author?.nickname
+          await gateway.receive({...target,id:data.id,text:data.content,...(typeof username === 'string' && {username})})
         }
       } else if (openId(data.openid)) {
         if (event.t === 'C2C_MSG_REJECT' || event.t === 'FRIEND_DEL') runtime.state.set(key('blocked',data.openid),'yes')

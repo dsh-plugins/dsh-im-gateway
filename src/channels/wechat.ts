@@ -152,7 +152,9 @@ export async function startWechat(options: WechatConfig, runtime: ChannelRuntime
         const text = msg.item_list?.filter(item => item.type === 1).map(item => item.text_item?.text ?? '').join('\n')
         if (!text?.trim()) continue
         const target = { chat: msg.from_user_id, user: msg.from_user_id }
-        if (!permits(target) && !/^\/pair [0-9a-f]{20}$/i.test(text.trim())) continue
+        if (!runtime.approvals && !permits(target) && !/^\/pair [0-9a-f]{20}$/i.test(text.trim())) {
+          continue
+        }
         runtime.state.set(contextKey(target.user), msg.context_token)
         await gateway.receive({ ...target, id: String(msg.message_id), text })
       }

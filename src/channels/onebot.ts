@@ -79,12 +79,13 @@ export function startOneBot(config: OneBotConfig, runtime: ChannelRuntime): void
     if (qqNumber(event.self_id) !== selfId) throw new CallbackError(403)
     if (event.post_type !== 'message' || event.message_type !== 'private' || event.sub_type !== 'friend') return {}
     const user = qqNumber(event.user_id)
-    const sender = event.sender as {user_id?:unknown} | undefined
+    const sender = event.sender as {user_id?:unknown; nickname?:unknown} | undefined
     if (!user || user === selfId || (sender?.user_id !== undefined && qqNumber(sender.user_id) !== user) ||
         !Number.isSafeInteger(event.message_id)) return {}
     const text = textOnly(event.message)
     if (text.trim()) {
-      const input: Incoming = {chat:user,user,id:String(event.message_id),text}
+      const input: Incoming = {chat:user,user,id:String(event.message_id),text,
+        ...(typeof sender?.nickname === 'string' && {username:sender.nickname})}
       await gateway.receive(input)
     }
     return {}

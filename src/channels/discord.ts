@@ -14,11 +14,13 @@ const inspectPrefix = 'prism:inspect:'
 
 export function discordMessage(message: {
   channel: { type: ChannelType; recipientId?: string | null }
-  channelId: string; author: { id: string; bot: boolean }; id: string; content: string; webhookId: string | null
+  channelId: string; author: { id: string; bot: boolean; username?: string; globalName?: string | null }
+  id: string; content: string; webhookId: string | null
 }): Incoming | undefined {
   if (message.channel.type !== ChannelType.DM || message.author.bot || message.webhookId ||
       message.channel.recipientId !== message.author.id || !message.content.trim()) return
-  return { chat: message.channelId, user: message.author.id, text: message.content, id: message.id }
+  const username = message.author.globalName || message.author.username
+  return { chat: message.channelId, user: message.author.id, text: message.content, id: message.id, ...(username && {username}) }
 }
 
 export function discordPayload(reply: Reply) {
@@ -62,8 +64,9 @@ export async function startDiscord(config: DiscordConfig, runtime: ChannelRuntim
   client.once(Events.ClientReady, ready => {
     if (runtime.signal.aborted) return
     const id = 'discord/' + ready.user.id
+    const permits = runtime.access(id, config.allowedUserIds)
     const gateway = runtime.mount({
-      id, maxTextLength: 2000, permits: runtime.access(id, config.allowedUserIds),
+      id, maxTextLength: 2000, permits,
       send,
       async edit(target, messageId, reply) {
         const channel = await privateChannel(target)
@@ -83,9 +86,13 @@ export async function startDiscord(config: DiscordConfig, runtime: ChannelRuntim
       if (!interaction.isButton() || !interaction.customId.startsWith(inspectPrefix) ||
           interaction.channel?.type !== ChannelType.DM || interaction.channel.recipientId !== interaction.user.id ||
           interaction.message.author.id !== ready.user.id) return
+      const target = {chat: interaction.channelId, user: interaction.user.id}
+      if (!permits(target)) {
+        return
+      }
       try {
         await interaction.deferUpdate()
-        await gateway.receive({ chat: interaction.channelId, user: interaction.user.id, id: interaction.id,
+        await gateway.receive({ ...target, id: interaction.id,
           locale: interaction.locale, text: '/inspect ' + interaction.customId.slice(inspectPrefix.length) })
       } catch { runtime.warn('Discord task inspection failed') }
     })

@@ -2,7 +2,7 @@ import { dirname } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Config } from './index.js'
 import { ImGateway, type ConversationService } from './gateway.js'
-import type { GatewayState } from './state.js'
+import type { ApprovalDecision, GatewayState } from './state.js'
 import type { ChannelRuntime } from './runtime.js'
 import { localeOf } from './i18n.js'
 import { channels, ChannelConfiguration, type Channel, type ChannelStatus } from './admin-config.js'
@@ -42,6 +42,16 @@ export class ChannelSupervisor {
 
   list() { return channels.map(channel => this.view(channel)) }
 
+  decideApproval(id: string, decision: ApprovalDecision) {
+    const result = this.state.decideApproval(id, decision)
+    if (result && result !== 'conflict' && decision === 'approve') {
+      for (const channel of this.active.values()) {
+        channel.gateways.get(result.channel)?.resume(result.target)
+      }
+    }
+    return result === 'conflict' ? result : Boolean(result)
+  }
+
   async save(channel: Channel, request: Record<string, unknown>) {
     this.configuration.save(channel, request)
     await this.reload(channel)
@@ -73,7 +83,7 @@ export class ChannelSupervisor {
     const signal = task.stop.signal
     const log = this.ctx.logger('dsh-im-gateway')
     const runtime: ChannelRuntime = {
-      state: this.state, directory: dirname(this.file), signal,
+      state: this.state, directory: dirname(this.file), signal, approvals: this.config.managed,
       ...(this.config.managed && {readSecret: field => this.configuration.secret(channel, field)}),
       warn: message => log.warn(message),
       access: (id, users) => {
@@ -84,7 +94,7 @@ export class ChannelSupervisor {
         signal.throwIfAborted()
         if (task.gateways.has(transport.id)) throw new Error('Duplicate IM transport')
         const gateway = new ImGateway(this.ctx.get('prism', true) as ConversationService, this.state, transport,
-          () => log.warn('IM delivery pending: ' + channel), localeOf(this.config.locale) ?? 'zh')
+          () => log.warn('IM delivery pending: ' + channel), localeOf(this.config.locale) ?? 'zh', {approvals: this.config.managed})
         task.gateways.set(transport.id, gateway)
         gateway.start()
         task.status = 'running'
