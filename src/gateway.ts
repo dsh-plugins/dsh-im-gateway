@@ -4,6 +4,10 @@ import { localeOf, locales, messages, type Locale } from './i18n.js'
 import { GatewayState, principal } from './state.js'
 import { splitText, type Destination, type Incoming, type ImTransport, type Reply } from './transport.js'
 
+function modelLabel(model: ConversationView['models'][number]): string {
+  return 'label' in model && typeof model.label === 'string' ? model.label : model.id
+}
+
 export interface ConversationService {
   view(owner: string): Promise<ConversationView>
   message(owner: string, text: string, requestId: string): Promise<ConversationView>
@@ -187,9 +191,9 @@ export class ImGateway {
         const model = models.find(m => m.id === arg) ?? (/^[1-9]\d*$/.test(arg) ? models[Number(arg) - 1] : undefined)
         if (!model) return m.noModel
         await this.core.selectModel(owner, model.id)
-        return m.currentModel + ' ' + model.id
+        return m.currentModel + ' ' + modelLabel(model)
       }
-      return models.map((model, i) => (i + 1) + '. ' + model.id + (model.id === modelId ? ' (' + m.selected + ')' : '') +
+      return models.map((model, i) => (i + 1) + '. ' + modelLabel(model) + (model.id === modelId ? ' (' + m.selected + ')' : '') +
         '\n' + model.description).join('\n\n') + '\n\n' + m.modelHint
     }
     if (name === 'tasks') {
