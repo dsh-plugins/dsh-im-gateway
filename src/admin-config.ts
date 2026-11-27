@@ -6,9 +6,9 @@ export type Channel = typeof channels[number]
 export type ChannelStatus = 'disabled' | 'starting' | 'running' | 'error'
 type Fields = {allowedUserIds: string[]; appId?: string; domain?: string; botId?: string; selfId?: string; apiBase?: string}
 type SecretValues = Record<string, string | null>
-type Document = {revision: number; enabled: boolean; fields: Fields; secrets: SecretValues}
+type Document = {revision: number; enabled: boolean; fields: Fields; secrets: SecretValues; username?: string}
 export type ChannelView = Omit<Document, 'secrets'> & {
-  channel: Channel; status: ChannelStatus; registered: boolean; secrets: Record<string, boolean>
+  channel: Channel; status: ChannelStatus; registered: boolean; accountId?: string; secrets: Record<string, boolean>
 }
 
 export class AdminError extends Error {
@@ -88,9 +88,10 @@ export class ChannelConfiguration {
   }
 
   view(channel: Channel, status: ChannelStatus): ChannelView {
-    const {enabled, revision, fields, secrets} = this.read(channel)
-    const registered = (channel === 'feishu' || channel === 'wechat') && !!this.state.get(channel + '/registration')
-    return {channel, enabled, revision, fields, status, registered, secrets: Object.fromEntries(
+    const {enabled, revision, fields, secrets, username} = this.read(channel)
+    const registration = channel === 'feishu' || channel === 'wechat' ? this.state.get(channel + '/registration') : undefined
+    const accountId = registration && (JSON.parse(registration) as {botId?: string; appId?: string})[channel === 'wechat' ? 'botId' : 'appId']
+    return {channel, enabled, revision, fields, status, registered: Boolean(registration), username, accountId, secrets: Object.fromEntries(
       Object.keys(credentialFields[channel]).map(name => [name, !!this.secret(channel, name, secrets)]))}
   }
 
@@ -101,6 +102,7 @@ export class ChannelConfiguration {
     if (typeof payload.enabled !== 'boolean' || !Number.isSafeInteger(payload.revision)) throw new AdminError('invalid')
     if (payload.revision !== current.revision) throw new AdminError('conflict')
     const fields = updateFields(channel, current.fields, payload.fields)
+    const username = payload.username === undefined ? current.username : clean(payload.username, 256)
     const updates = object(payload.secrets ?? {})
     const secrets = {...current.secrets}
     for (const [name,value] of Object.entries(updates)) {
@@ -124,7 +126,7 @@ export class ChannelConfiguration {
         if (!registered || fields.domain && JSON.parse(registered).domain !== fields.domain) throw new AdminError('invalid')
       } else if (Object.keys(credentialFields[channel]).some(name => !this.secret(channel, name, secrets))) throw new AdminError('invalid')
     }
-    const next = {revision: current.revision + 1, enabled: payload.enabled, fields, secrets}
+    const next: Document = {revision: current.revision + 1, enabled: payload.enabled, fields, secrets, username: username || undefined}
     if (!this.state.compareAndSet(key, raw, JSON.stringify(next))) throw new AdminError('conflict')
   }
 
