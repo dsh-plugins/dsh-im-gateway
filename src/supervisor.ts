@@ -129,15 +129,20 @@ export class ChannelSupervisor {
         const allowed = new Set(users)
         return target => !signal.aborted && (allowed.has(target.user) || this.state.paired(id, target))
       },
-      mount: transport => {
+      mount: (transport, status = 'running') => {
         signal.throwIfAborted()
         if (task.gateways.has(transport.id)) throw new Error('Duplicate IM transport')
         const gateway = new ImGateway(this.ctx.get('prism', true) as ConversationService, this.state, transport,
           () => log.warn('IM delivery pending: ' + channel), localeOf(this.config.locale) ?? 'zh', {approvals: this.config.managed})
         task.gateways.set(transport.id, gateway)
         gateway.start()
-        task.status = 'running'
+        task.status = status
         return gateway
+      },
+      connectionStatus: status => {
+        if (!signal.aborted) {
+          task.status = status
+        }
       },
       webhook: (path, handler) => {
         signal.throwIfAborted()

@@ -138,6 +138,9 @@ export class FeishuTransport implements ImTransport {
 export async function startFeishu(config: FeishuConfig, runtime: ChannelRuntime): Promise<void> {
   runtime.signal.throwIfAborted()
   const auth = credentials(config, runtime)
+  if (!/^cli_[0-9a-fA-F]{16}$/.test(auth.appId)) {
+    throw new Error('飞书应用 ID 格式错误')
+  }
   const id = 'feishu/' + auth.domain + '/' + auth.appId
   const users = [...(config.allowedUserIds ?? config.allowedUsers ?? [])]
   if (!runtime.approvals && auth.openId) {
@@ -148,7 +151,7 @@ export async function startFeishu(config: FeishuConfig, runtime: ChannelRuntime)
   const options = { appId: auth.appId, appSecret: auth.appSecret, domain: auth.domain === 'lark' ? Lark.Domain.Lark : Lark.Domain.Feishu,
     logger, loggerLevel: Lark.LoggerLevel.fatal }
   const client = new Lark.Client(options)
-  const gateway = runtime.mount(new FeishuTransport(id, client, runtime.access(id, users)))
+  const gateway = runtime.mount(new FeishuTransport(id, client, runtime.access(id, users)), 'starting')
   const readUsername = async (user: string) => {
     try {
       const result = await client.contact.user.get({path: {user_id: user}, params: {user_id_type: 'open_id'}})
@@ -167,7 +170,16 @@ export async function startFeishu(config: FeishuConfig, runtime: ChannelRuntime)
       }
     },
   })
-  const ws = new Lark.WSClient({ ...options, onError: () => runtime.warn('Feishu WebSocket failed') })
+  const connected = () => runtime.connectionStatus?.('running')
+  const ws = new Lark.WSClient({ ...options, handshakeTimeoutMs: 15_000, onReady: connected, onReconnected: connected,
+    onReconnecting: () => runtime.connectionStatus?.('starting'), onError: error => {
+      if (!runtime.signal.aborted) {
+        runtime.connectionStatus?.('error')
+        const code = /^pullConnectConfig failed: code=(\d+),/.exec(error.message)?.[1]
+        runtime.warn(code ? `飞书长连接失败，开放平台错误码 ${code}` : '飞书长连接失败')
+      }
+    },
+  })
   const close = () => ws.close({ force: true })
   runtime.signal.addEventListener('abort', close, { once: true })
   try { await ws.start({ eventDispatcher: dispatcher }) } catch {

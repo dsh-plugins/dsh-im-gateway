@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { ChannelStatus } from './admin-config.js'
 import type { ImGateway } from './gateway.js'
 import type { GatewayState } from './state.js'
 import type { Destination, ImTransport } from './transport.js'
@@ -9,7 +10,9 @@ export interface ChannelRuntime {
   readonly directory: string
   readonly approvals?: boolean
   readSecret?(field: string): string | undefined
-  mount(transport: ImTransport): ImGateway
+  mount(transport: ImTransport, status?: 'starting' | 'running'): ImGateway
+  /** 长连接适配器按协议握手和重连结果报告渠道状态。 */
+  connectionStatus?(status: Exclude<ChannelStatus, 'disabled'>): void
   access(channel: string, allowedUsers?: readonly string[]): (target: Destination) => boolean
   warn(message: string): void
   webhook(path: string, handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>): void
