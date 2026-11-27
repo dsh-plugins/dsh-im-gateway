@@ -1,5 +1,6 @@
 import type { Config } from './index.js'
 import type { GatewayState } from './state.js'
+import type { FeishuCredentials } from './feishu.js'
 
 export const channels = ['telegram', 'wechat', 'feishu', 'wecom', 'qq', 'onebot', 'discord'] as const
 export type Channel = typeof channels[number]
@@ -7,8 +8,10 @@ export type ChannelStatus = 'disabled' | 'starting' | 'running' | 'error'
 type Fields = {allowedUserIds: string[]; appId?: string; domain?: string; botId?: string; selfId?: string; apiBase?: string}
 type SecretValues = Record<string, string | null>
 type Document = {revision: number; enabled: boolean; fields: Fields; secrets: SecretValues; username?: string}
+type FeishuBinding = Omit<FeishuCredentials, 'appSecret'> & {mode: 'manual' | 'scan'; appSecret?: string}
 export type ChannelView = Omit<Document, 'secrets'> & {
   channel: Channel; status: ChannelStatus; registered: boolean; accountId?: string; secrets: Record<string, boolean>
+  feishu?: Omit<FeishuBinding, 'appSecret'> & {secretStored: boolean; nickname?: string}
 }
 
 export class AdminError extends Error {
@@ -87,15 +90,30 @@ export class ChannelConfiguration {
     if (channel === 'telegram') return this.state.get('telegram/token')
   }
 
+  feishuBinding(): FeishuBinding | undefined {
+    const {fields, secrets} = this.read('feishu')
+    if (fields.appId) {
+      return {mode: 'manual', appId: fields.appId, domain: fields.domain === 'lark' ? 'lark' : 'feishu',
+        appSecret: this.secret('feishu', 'appSecret', secrets)}
+    }
+    const registration = this.state.get('feishu/registration')
+    if (registration) {
+      const {appId, appSecret, domain} = JSON.parse(registration) as FeishuCredentials
+      return {mode: 'scan', appId, appSecret, domain}
+    }
+  }
+
   view(channel: Channel, status: ChannelStatus): ChannelView {
     const {enabled, revision, fields, secrets, username} = this.read(channel)
     const registration = channel === 'feishu' || channel === 'wechat' ? this.state.get(channel + '/registration') : undefined
     const accountId = registration && (JSON.parse(registration) as {botId?: string; appId?: string})[channel === 'wechat' ? 'botId' : 'appId']
-    return {channel, enabled, revision, fields, status, registered: Boolean(registration), username, accountId, secrets: Object.fromEntries(
+    const binding = channel === 'feishu' ? this.feishuBinding() : undefined
+    const feishu = binding && {mode: binding.mode, appId: binding.appId, domain: binding.domain, secretStored: Boolean(binding.appSecret)}
+    return {channel, enabled, revision, fields, status, registered: Boolean(registration), username, accountId, feishu, secrets: Object.fromEntries(
       Object.keys(credentialFields[channel]).map(name => [name, !!this.secret(channel, name, secrets)]))}
   }
 
-  save(channel: Channel, payload: Record<string, unknown>): void {
+  save(channel: Channel, payload: Record<string, unknown>, verifyFeishu?: (auth: FeishuCredentials) => Promise<unknown>): void | Promise<void> {
     const key = this.key(channel)
     const raw = this.state.get(key)
     const current = this.read(channel, raw)
@@ -127,7 +145,19 @@ export class ChannelConfiguration {
       } else if (Object.keys(credentialFields[channel]).some(name => !this.secret(channel, name, secrets))) throw new AdminError('invalid')
     }
     const next: Document = {revision: current.revision + 1, enabled: payload.enabled, fields, secrets, username: username || undefined}
-    if (!this.state.compareAndSet(key, raw, JSON.stringify(next))) throw new AdminError('conflict')
+    const commit = () => {
+      if (!this.state.compareAndSet(key, raw, JSON.stringify(next))) {
+        throw new AdminError('conflict')
+      }
+    }
+    if (channel === 'feishu' && payload.feishuMode === 'manual') {
+      const appSecret = this.secret(channel, 'appSecret', secrets)
+      if (!fields.appId || !appSecret || !verifyFeishu) {
+        throw new AdminError('invalid')
+      }
+      return verifyFeishu({appId: fields.appId, appSecret, domain: fields.domain === 'lark' ? 'lark' : 'feishu'}).then(commit)
+    }
+    commit()
   }
 
   registered(channel: 'wechat' | 'feishu'): void {

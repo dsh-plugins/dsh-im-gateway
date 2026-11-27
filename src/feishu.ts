@@ -41,6 +41,29 @@ export async function loginFeishu(
   return info
 }
 
+/** 通过应用身份查询飞书返回的机器人昵称。 */
+export async function lookupFeishuNickname(auth: FeishuCredentials, signal: AbortSignal): Promise<string> {
+  const origin = auth.domain === 'lark' ? 'https://open.larksuite.com' : 'https://open.feishu.cn'
+  const request = {signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]), redirect: 'error'} as const
+  const tokenResponse = await fetch(origin + '/open-apis/auth/v3/tenant_access_token/internal', {
+    ...request, method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({app_id: auth.appId, app_secret: auth.appSecret}),
+  })
+  const token = await tokenResponse.json() as {code?: number; tenant_access_token?: string} | null
+  if (!tokenResponse.ok || token?.code !== 0 || typeof token.tenant_access_token !== 'string' || !token.tenant_access_token) {
+    throw new Error('无法获取飞书应用访问令牌')
+  }
+  const botResponse = await fetch(origin + '/open-apis/bot/v3/info', {
+    ...request, headers: {Authorization: `Bearer ${token.tenant_access_token}`},
+  })
+  const bot = await botResponse.json() as {code?: number; bot?: {app_name?: string}} | null
+  const nickname = typeof bot?.bot?.app_name === 'string' ? bot.bot.app_name.trim() : ''
+  if (!botResponse.ok || bot?.code !== 0 || !nickname) {
+    throw new Error('无法获取飞书机器人昵称')
+  }
+  return nickname
+}
+
 function credentials(config: FeishuConfig, runtime: ChannelRuntime): Registration {
   if (config.appId || config.appSecretEnv) {
     const secret = channelSecret(runtime, 'appSecret', config.appSecretEnv ?? 'FEISHU_APP_SECRET')

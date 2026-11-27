@@ -22,7 +22,7 @@ async function body(req: IncomingMessage): Promise<Record<string, unknown>> {
 }
 
 interface Administration {
-  list(): ChannelView[]
+  list(): Promise<ChannelView[]>
   approvals(): ApprovalView[]
   decideApproval(id: string, decision: ApprovalDecision): boolean | 'conflict'
   save(channel: Channel, request: Record<string, unknown>): Promise<ChannelView>
@@ -39,7 +39,14 @@ export function adminRoute(admin: Administration): WebRoute {
     try {
       if (!peer || peer.signal.aborted || peer.principal.kind !== 'owner') throw new AdminError('forbidden')
       if (req.headers['sec-fetch-site'] === 'cross-site') throw new AdminError('forbidden')
-      if (req.method === 'GET') { res.end(JSON.stringify({channels: admin.list(), approvals: admin.approvals()})); return }
+      if (req.method === 'GET') {
+        const channels = await admin.list()
+        if (peer.signal.aborted) {
+          throw new AdminError('forbidden')
+        }
+        res.end(JSON.stringify({channels, approvals: admin.approvals()}))
+        return
+      }
       if (req.method !== 'POST') { res.writeHead(405, {Allow: 'GET, POST'}); res.end(); return }
       const origin = typeof req.headers.origin === 'string' ? URL.parse(req.headers.origin) : null
       if (!origin || !['http:', 'https:'].includes(origin.protocol) || origin.host !== req.headers.host

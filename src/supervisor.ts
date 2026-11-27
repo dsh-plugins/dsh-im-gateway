@@ -4,8 +4,9 @@ import type { Config } from './index.js'
 import { ImGateway, type ConversationService } from './gateway.js'
 import type { ApprovalDecision, GatewayState } from './state.js'
 import type { ChannelRuntime } from './runtime.js'
+import type { FeishuCredentials } from './feishu.js'
 import { localeOf } from './i18n.js'
-import { channels, ChannelConfiguration, type Channel, type ChannelStatus } from './admin-config.js'
+import { AdminError, channels, ChannelConfiguration, type Channel, type ChannelStatus } from './admin-config.js'
 
 type Starters = {[K in Channel]: (options: NonNullable<Config[K]>, runtime: ChannelRuntime) => Promise<void>}
 const adapters: Starters = {
@@ -29,6 +30,8 @@ export class ChannelSupervisor {
   readonly configuration: ChannelConfiguration
   private active = new Map<Channel, ActiveChannel>()
   private pending = new Map<Channel, Promise<void>>()
+  private readonly nicknameAbort = new AbortController()
+  private nickname?: {auth: FeishuCredentials; expiresAt: number; result: Promise<string>}
   private closed = false
 
   constructor(private readonly ctx: Context, private readonly config: Config, private readonly state: GatewayState,
@@ -40,7 +43,37 @@ export class ChannelSupervisor {
     return this.configuration.view(channel, this.active.get(channel)?.status ?? 'disabled')
   }
 
-  list() { return channels.map(channel => this.view(channel)) }
+  list() { return Promise.all(channels.map(channel => channel === 'feishu' ? this.feishuView() : this.view(channel))) }
+
+  private lookupNickname(auth: FeishuCredentials, refresh = false): Promise<string> {
+    const cached = this.nickname
+    if (!refresh && cached && cached.expiresAt > Date.now() && cached.auth.appId === auth.appId
+        && cached.auth.appSecret === auth.appSecret && cached.auth.domain === auth.domain) {
+      return cached.result
+    }
+    const result = import('./feishu.js').then(({lookupFeishuNickname}) => lookupFeishuNickname(auth, this.nicknameAbort.signal))
+    this.nickname = {auth, expiresAt: Date.now() + 60_000, result}
+    return result
+  }
+
+  private async feishuView() {
+    const binding = this.configuration.feishuBinding()
+    let nickname: string | undefined
+    if (binding?.appSecret) {
+      try {
+        nickname = await this.lookupNickname({appId: binding.appId, domain: binding.domain, appSecret: binding.appSecret})
+      } catch {
+        if (this.nicknameAbort.signal.aborted) {
+          throw new AdminError('unavailable')
+        }
+      }
+    }
+    const view = this.view('feishu')
+    if (nickname && view.feishu && view.feishu.appId === binding?.appId && view.feishu.domain === binding.domain) {
+      view.feishu.nickname = nickname
+    }
+    return view
+  }
 
   decideApproval(id: string, decision: ApprovalDecision) {
     const result = this.state.decideApproval(id, decision)
@@ -53,9 +86,15 @@ export class ChannelSupervisor {
   }
 
   async save(channel: Channel, request: Record<string, unknown>) {
-    this.configuration.save(channel, request)
+    await this.configuration.save(channel, request, async auth => {
+      try {
+        await this.lookupNickname(auth, true)
+      } catch {
+        throw new AdminError(this.nicknameAbort.signal.aborted ? 'unavailable' : 'invalid')
+      }
+    })
     await this.reload(channel)
-    return this.view(channel)
+    return channel === 'feishu' ? this.feishuView() : this.view(channel)
   }
 
   async registered(channel: 'wechat' | 'feishu') {
@@ -139,6 +178,7 @@ export class ChannelSupervisor {
 
   async close() {
     this.closed = true
+    this.nicknameAbort.abort()
     await Promise.allSettled([...this.pending.values()])
     await Promise.allSettled(channels.map(channel => this.stop(channel)))
   }
