@@ -45,7 +45,7 @@ test('discord.js bridges a Gateway DM to Prism and posts and edits the same task
   await Promise.race([mounted.promise,running])
   sdk.actions.MessageCreate.handle({id:incomingId,channel_id:channel,channel_type:ChannelType.DM,author:user,type:0,
     timestamp:new Date().toISOString(),content:'hello',mentions:[],mention_roles:[],attachments:[],embeds:[]})
-  assert.deepEqual(await received.promise,{id:incomingId,user:user.id,chat:channel,text:'hello'})
+  assert.deepEqual(await received.promise,{id:incomingId,user:user.id,chat:channel,text:'hello',username:user.username})
   const target={chat:channel,user:user.id}, reply={text:'Task',inspectTask:'test',deliveryId:'a'.repeat(64)}
   assert.equal(await adapter.send(target,reply),outgoingId)
   assert.equal(await adapter.edit(target,outgoingId,{...reply,text:'Complete'}),outgoingId)
