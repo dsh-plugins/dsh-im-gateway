@@ -1,7 +1,7 @@
 {
   "name": "@dsh-prism/dsh-im-gateway",
   "description": "Connect Prism to seven messaging channels for private conversations and task updates.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
