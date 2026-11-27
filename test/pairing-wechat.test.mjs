@@ -5,10 +5,13 @@ import { promisify } from 'node:util'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 import { GatewayState, ImGateway, principal } from '../dist/index.js'
 import { startWechat, loginWechat } from '../dist/channels/wechat.js'
 import { locales, messages } from '../dist/i18n.js'
 import { splitText } from '../dist/transport.js'
+
+const cli = fileURLToPath(new URL('../scripts/prism-im.mjs', import.meta.url))
 
 test('channel-bound pairing is single use, preserves authorization after restart, and allows a local language choice', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'prism-im-pair-'))
@@ -36,7 +39,9 @@ test('channel-bound pairing is single use, preserves authorization after restart
   assert(restored.paired(channel, dest))
   assert(!restored.paired('wechat/other-bot', dest))
   assert.equal(restored.get('language/' + principal(channel, dest)), 'ja')
-  assert.equal((await stat(path)).mode & 0o777, 0o600)
+  if (process.platform !== 'win32') {
+    assert.equal((await stat(path)).mode & 0o777, 0o600)
+  }
   restored.close()
   for (const locale of locales) assert.deepEqual(Object.keys(messages(locale)).sort(), Object.keys(messages('en')).sort())
   const text = '语🎵'.repeat(2000)
@@ -119,7 +124,6 @@ test('CLI setup preserves configuration and issues a pairing code usable by the 
   t.after(() => rm(dir, { recursive: true, force: true }))
   const cfg = join(dir, 'prism.json')
   await writeFile(cfg, JSON.stringify({ orchestrator: { existing: true }, im: { statePath: 'example.sqlite' } }))
-  const cli = new URL('../scripts/prism-im.mjs', import.meta.url).pathname
   const { stdout } = await promisify(execFile)(process.execPath, [cli, 'setup', 'telegram', '--config', cfg])
   const code = /\/pair ([0-9A-F]{20})/.exec(stdout)?.[1]
   assert(code)
@@ -159,7 +163,6 @@ test('CLI help and pairing instructions follow system language and the configure
   t.after(() => rm(dir, { recursive: true, force: true }))
   const cfg = join(dir, 'prism.json')
   await writeFile(cfg, JSON.stringify({ im: { statePath: 'im.sqlite', locale: 'ja' } }))
-  const cli = new URL('../scripts/prism-im.mjs', import.meta.url).pathname
   const env = { ...process.env, DSH_LOCALE: '', LC_ALL: '', LC_MESSAGES: 'zh_CN.UTF-8', LANG: 'en_US.UTF-8' }
   const { stdout: help } = await promisify(execFile)(process.execPath, [cli, '--help'], { env })
   assert.match(help, /支持的通道/)
