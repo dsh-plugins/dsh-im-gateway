@@ -138,9 +138,6 @@ export class FeishuTransport implements ImTransport {
 export async function startFeishu(config: FeishuConfig, runtime: ChannelRuntime): Promise<void> {
   runtime.signal.throwIfAborted()
   const auth = credentials(config, runtime)
-  if (!/^cli_[0-9a-fA-F]{16}$/.test(auth.appId)) {
-    throw new Error('飞书应用 ID 格式错误')
-  }
   const id = 'feishu/' + auth.domain + '/' + auth.appId
   const users = [...(config.allowedUserIds ?? config.allowedUsers ?? [])]
   if (!runtime.approvals && auth.openId) {
@@ -182,7 +179,13 @@ export async function startFeishu(config: FeishuConfig, runtime: ChannelRuntime)
   })
   const close = () => ws.close({ force: true })
   runtime.signal.addEventListener('abort', close, { once: true })
-  try { await ws.start({ eventDispatcher: dispatcher }) } catch {
+  try {
+    await ws.start({ eventDispatcher: dispatcher })
+    // SDK 发现无效配置时会直接返回，此时没有连接回调。
+    if (!runtime.signal.aborted && ws.getConnectionStatus().state === 'idle') {
+      throw new Error('飞书长连接未启动')
+    }
+  } catch {
     close()
     runtime.signal.removeEventListener('abort', close)
     throw new Error('Feishu WebSocket startup failed')
