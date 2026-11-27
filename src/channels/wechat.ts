@@ -114,7 +114,11 @@ export async function startWechat(options: WechatConfig, runtime: ChannelRuntime
   const account: Registration = saved
   let expired = false
   const channel = 'wechat/' + account.botId
-  const allowed = runtime.access(channel, [...(options.allowedUserIds ?? []), ...(account.user ? [account.user] : [])])
+  const users = [...(options.allowedUserIds ?? [])]
+  if (!runtime.approvals && account.user) {
+    users.push(account.user)
+  }
+  const allowed = runtime.access(channel, users)
   const permits = (target: Destination) => target.chat === target.user && allowed(target)
   const contextKey = (user: string) => channel + '/context/' + user
   const base_info = { channel_version: '2.4.10' }

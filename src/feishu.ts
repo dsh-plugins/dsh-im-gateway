@@ -139,7 +139,10 @@ export async function startFeishu(config: FeishuConfig, runtime: ChannelRuntime)
   runtime.signal.throwIfAborted()
   const auth = credentials(config, runtime)
   const id = 'feishu/' + auth.domain + '/' + auth.appId
-  const users = [...config.allowedUserIds ?? config.allowedUsers ?? [], ...auth.openId ? [auth.openId] : []]
+  const users = [...(config.allowedUserIds ?? config.allowedUsers ?? [])]
+  if (!runtime.approvals && auth.openId) {
+    users.push(auth.openId)
+  }
   // Some SDK clients fall back to info at the fatal level. Keep credential-bearing HTTP objects off host logs.
   const logger = { trace() {}, debug() {}, info() {}, warn() {}, error() {} }
   const options = { appId: auth.appId, appSecret: auth.appSecret, domain: auth.domain === 'lark' ? Lark.Domain.Lark : Lark.Domain.Feishu,
